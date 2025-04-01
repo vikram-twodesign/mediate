@@ -1,4 +1,4 @@
-# Medical Consultation Transcription App
+# Mediate App - The Medical Professional's Smart Assistant
 
 This application provides real-time transcription services for medical consultations using Deepgram's AI speech recognition.
 
