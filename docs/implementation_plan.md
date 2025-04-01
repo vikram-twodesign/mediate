@@ -1,0 +1,206 @@
+# Medical Consultation Assistant - Technical Implementation Plan
+
+## Phase 1: Project Setup & Foundation
+- [x] 1.1. Create project repository and establish CI/CD pipeline
+- [x] 1.2. Set up development environment
+   - [x] 1.2.1. Install development tools based on chosen stack
+   - [x] 1.2.2. Configure linting and formatting tools
+   - [x] 1.2.3. Set up TypeScript configuration (if using JavaScript stack)
+- [x] 1.3. Create frontend application
+   - [x] 1.3.1. Initialize React project with TypeScript
+   - [x] 1.3.2. Add Tailwind CSS and set up Shadcn/UI component library
+   - [x] 1.3.3. Configure folder structure following best practices
+   - [x] 1.3.4. Document component architecture and patterns
+- [x] 1.4. Set up Python FastAPI framework
+   - [x] 1.4.1. Initialize Python FastAPI project with proper structure
+   - [x] 1.4.2. Configure server with middleware, CORS, and error handling
+   - [x] 1.4.3. Set up API routes structure with automatic OpenAPI documentation
+   - [x] 1.4.4. Configure Pydantic models for request/response validation
+- [x] 1.5. Establish database connection
+   - [x] 1.5.1. Set up MongoDB Atlas account or PostgreSQL instance
+   - [x] 1.5.2. Create database connection utility
+   - [x] 1.5.3. Define initial schema models
+   - [ ] 1.5.4. Document database schema and relationships
+- [x] 1.6. Configure authentication system
+   - [x] 1.6.1. Implement doctor registration/login endpoints
+   - [x] 1.6.2. Set up JWT token generation and validation
+   - [x] 1.6.3. Create authentication middleware
+
+## Phase 2: Audio Recording & Transcription
+- [x] 2.1. Implement audio recording on frontend
+   - [x] 2.1.1. Create recording component using Web Audio API and MediaRecorder
+   - [x] 2.1.2. Add start/stop/pause functionality
+   - [x] 2.1.3. Implement audio storage and format conversion
+   - [ ] 2.1.4. Document audio handling processes
+- [ ] 2.2. Set up asynchronous processing for audio
+   - [ ] 2.2.1. Configure Celery with RabbitMQ for task queueing
+   - [ ] 2.2.2. Create Celery worker processes for handling audio transcription
+   - [x] 2.2.3. Implement FastAPI background tasks for simpler async operations
+   - [ ] 2.2.4. Implement progress tracking and error handling
+- [x] 2.3. Integrate speech recognition
+   - [x] 2.3.1. Set up Google Cloud Speech-to-Text or AWS Transcribe
+   - [x] 2.3.2. Implement streaming transcription API
+   - [ ] 2.3.3. Create fallback mechanisms for reliability
+   - [x] 2.3.4. Document API integration points
+     - **Implementation Note (Deepgram Streaming):**
+       - Backend (`backend/app/api/endpoints/transcription.py`): Implemented a FastAPI WebSocket endpoint (`/ws/transcribe`).
+       - Uses the `deepgram-sdk` to establish a live transcription connection to Deepgram upon client connection.
+       - Configured with `diarize=True` to enable speaker segmentation.
+       - Forwards incoming audio bytes (expected as raw `linear16` PCM @ 16kHz) from the client WebSocket to Deepgram.
+       - Listens for `Transcript` events from Deepgram and sends formatted JSON (`{type: "transcript", speaker: number, text: string, is_final: boolean}`) back to the client WebSocket.
+       - Frontend (`frontend/src/app/consultation/page.tsx`):
+         - Connects to the backend WebSocket endpoint.
+         - Uses `AudioContext` and `ScriptProcessorNode` (or future `AudioWorkletNode`) to capture microphone audio at 16kHz.
+         - Converts audio to `Int16Array` (raw PCM) and sends the `ArrayBuffer` directly over the WebSocket.
+         - Receives transcript messages and updates the UI, displaying speaker labels ("Speaker 1", "Speaker 2", etc.) with alternating colors.
+- [x] 2.4. Develop transcription processing
+   - [x] 2.4.1. Create text segmentation by speaker
+   - [x] 2.4.2. Implement medical terminology recognition
+   - [x] 2.4.3. Add punctuation and formatting enhancements
+- [x] 2.5. Build transcription storage and retrieval
+   - [x] 2.5.1. Design database schema for transcriptions
+   - [x] 2.5.2. Create API endpoints for saving/retrieving transcripts
+   - [ ] 2.5.3. Implement efficient querying for large transcripts
+   - [ ] 2.5.4. Document data flow and retention policies
+
+## Phase 3: Real-time Analysis Engine
+- [x] 3.1. Set up NLP service integration
+   - [x] 3.1.1. Configure OpenAI API or similar NLP service (Used Google Gemini API)
+   - [x] 3.1.2. Implement rate limiting and error handling (Basic error handling added)
+   - [x] 3.1.3. Design prompt engineering for medical context (Implemented in Gemini service)
+   - [ ] 3.1.4. Document API usage patterns and costs
+- [x] 3.2. Develop symptom extraction system
+   - [x] 3.2.1. Create NLP pipeline using spaCy or NLTK to identify symptoms in transcription (Used Gemini API)
+   - [x] 3.2.2. Build medical entity recognition model or integrate medical terminology database (Handled by Gemini API)
+   - [x] 3.2.3. Implement continuous analysis of ongoing conversation (Via WebSocket and threshold)
+   - [x] 3.2.4. Build system to categorize and prioritize symptoms (Basic extraction via Gemini)
+- [x] 3.3. Build question suggestion engine
+   - [x] 3.3.1. Create prompt templates for follow-up questions (Included in Gemini prompt)
+   - [x] 3.3.2. Implement context-aware suggestion algorithm (Via Gemini API context)
+   - [ ] 3.3.3. Add relevance scoring for suggested questions
+   - [ ] 3.3.4. Document question generation logic
+- [x] 3.4. Implement real-time UI updates
+   - [x] 3.4.1. Create WebSocket connection for streaming updates (Used existing connection)
+   - [x] 3.4.2. Build UI components for displaying suggestions (Updated existing card)
+   - [x] 3.4.3. Add notification system for important insights (Added Severity Badge)
+   - [ ] 3.4.4. Test and document real-time performance
+   - [x] 3.4.5. Enhance transcription UI to display speaker labels with distinct colors
+
+## Phase 4: Report Generation System
+- [x] 4.1. Design report templates
+   - [x] 4.1.1. Create structured document format
+   - [x] 4.1.2. Design severity scale and visual indicators (Severity levels defined, Badge added to UI)
+   - [x] 4.1.3. Implement customizable sections
+   - [ ] 4.1.4. Document template structure and customization options
+- [x] 4.2. Develop diagnosis suggestion engine
+   - [x] 4.2.1. Integrate with medical knowledge base/API
+   - [x] 4.2.2. Implement differential diagnosis algorithm using Python's ML capabilities
+   - [ ] 4.2.3. Use pandas and scikit-learn for symptom-diagnosis correlation
+   - [x] 4.2.4. Create confidence scoring system
+- [x] 4.3. Build severity assessment functionality
+   - [x] 4.3.1. Define severity criteria and thresholds (Handled by Gemini prompt)
+   - [x] 4.3.2. Create colour-coded warning system (Implemented Severity Badge)
+   - [x] 4.3.3. Implement urgent case detection (Via Gemini severity assessment)
+   - [ ] 4.3.4. Document severity assessment methodology
+- [ ] 4.4. Implement report export functionality
+   - [ ] 4.4.1. Create PDF generation capability
+   - [ ] 4.4.2. Add email/sharing options
+   - [ ] 4.4.3. Implement report versioning and history
+
+## Phase 5: Document Capture & Analysis
+- [ ] 5.1. Implement document photography
+   - [ ] 5.1.1. Create camera access component
+   - [ ] 5.1.2. Add image capture and preview functionality
+   - [ ] 5.1.3. Implement image enhancement for clarity
+   - [ ] 5.1.4. Document image capture guidelines
+- [x] 5.2. Develop OCR functionality
+   - [x] 5.2.1. Integrate Google Cloud Vision API or Azure Computer Vision
+   - [x] 5.2.2. Add medical document format recognition
+   - [ ] 5.2.3. Implement error correction for OCR results
+- [x] 5.3. Build document analysis system
+   - [x] 5.3.1. Create NLP pipeline for extracted text
+   - [x] 5.3.2. Implement data extraction for lab values and test results
+   - [x] 5.3.3. Add integration with diagnostic engine
+   - [ ] 5.3.4. Document OCR accuracy metrics and limitations
+- [x] 5.4. Implement document management
+   - [x] 5.4.1. Create storage system for captured documents
+   - [x] 5.4.2. Build document categorization functionality
+   - [ ] 5.4.3. Add document history and version tracking
+
+## Phase 6: Integration & Optimization
+- [ ] 6.1. Integrate all components
+   - [x] 6.1.1. Connect transcription to analysis engine
+   - [x] 6.1.2. Link document analysis to report generation
+   - [ ] 6.1.3. Ensure end-to-end data flow
+   - [ ] 6.1.4. Document complete system architecture
+- [ ] 6.2. Optimize performance
+   - [ ] 6.2.1. Implement caching strategy
+   - [x] 6.2.2. Add background processing for intensive tasks
+   - [ ] 6.2.3. Optimize API usage and database queries
+   - [ ] 6.2.4. Conduct and document performance benchmarks
+- [ ] 6.3. Enhance user experience
+   - [x] 6.3.1. Refine UI based on doctor feedback
+   - [ ] 6.3.2. Add keyboard shortcuts and accessibility features
+   - [x] 6.3.3. Implement responsive design for various devices
+- [ ] 6.4. Implement comprehensive error handling
+   - [ ] 6.4.1. Add graceful degradation for service outages
+   - [ ] 6.4.2. Create fallback mechanisms for critical features
+   - [ ] 6.4.3. Implement detailed error logging and recovery
+
+## Phase 7: Security & Compliance
+- [x] 7.1. Implement data encryption
+   - [ ] 7.1.1. Add encryption for data at rest
+   - [x] 7.1.2. Ensure secure data transmission
+   - [x] 7.1.3. Implement secure key management
+   - [ ] 7.1.4. Document encryption protocols
+- [ ] 7.2. Add consent management
+   - [ ] 7.2.1. Create patient consent capture system
+   - [ ] 7.2.2. Implement consent verification before recording
+   - [ ] 7.2.3. Add audit trails for consent management
+   - [ ] 7.2.4. Document consent workflows and compliance measures
+- [ ] 7.3. Conduct security audit
+   - [ ] 7.3.1. Perform penetration testing
+   - [ ] 7.3.2. Review code for security vulnerabilities
+   - [ ] 7.3.3. Assess third-party dependencies
+- [ ] 7.4. Ensure regulatory compliance
+   - [ ] 7.4.1. Verify HIPAA/GDPR requirements
+   - [ ] 7.4.2. Implement required privacy controls
+   - [ ] 7.4.3. Create compliance documentation
+
+## Phase 8: Testing & Deployment
+- [ ] 8.1. Implement automated testing
+   - [ ] 8.1.1. Write unit tests for critical components
+   - [ ] 8.1.2. Create integration tests for key workflows
+   - [ ] 8.1.3. Set up end-to-end testing
+   - [ ] 8.1.4. Document test coverage and results
+- [ ] 8.2. Conduct user acceptance testing
+   - [ ] 8.2.1. Recruit medical professionals for testing
+   - [ ] 8.2.2. Gather and implement feedback
+   - [ ] 8.2.3. Validate accuracy of medical content
+   - [ ] 8.2.4. Document UAT findings and resolutions
+- [ ] 8.3. Prepare deployment infrastructure
+   - [ ] 8.3.1. Set up Docker containers
+   - [ ] 8.3.2. Configure cloud services (AWS/Azure)
+   - [ ] 8.3.3. Implement monitoring and alerting
+   - [ ] 8.3.4. Document infrastructure setup and maintenance procedures
+- [ ] 8.4. Deploy MVP
+   - [ ] 8.4.1. Create deployment pipeline
+   - [ ] 8.4.2. Perform staged rollout
+   - [ ] 8.4.3. Establish support and update process
+   - [ ] 8.4.4. Create user documentation and training materials
+
+## Phase 9: Maintenance & Evolution
+- [ ] 9.1. Implement analytics and usage tracking
+   - [ ] 9.1.1. Add anonymous usage statistics
+   - [ ] 9.1.2. Create dashboard for system performance
+   - [ ] 9.1.3. Track diagnostic accuracy metrics
+   - [ ] 9.1.4. Document analytics strategy and privacy considerations
+- [ ] 9.2. Develop continuous improvement process
+   - [ ] 9.2.1. Establish feedback collection system
+   - [ ] 9.2.2. Create prioritization framework for enhancements
+   - [ ] 9.2.3. Implement regular medical knowledge updates
+- [ ] 9.3. Plan future features
+   - [ ] 9.3.1. Integration with electronic health records
+   - [ ] 9.3.2. Advanced analytics and trending
+   - [ ] 9.3.3. Expanded medical specialties support
+   - [ ] 9.3.4. Document product roadmap and vision

@@ -1,0 +1,20 @@
+# Core FastAPI framework
+fastapi>=0.110.0
+
+# ASGI server
+uvicorn[standard]>=0.27.1
+
+# Environment variable management
+python-dotenv>=1.0.1
+
+# Pydantic Settings for configuration
+pydantic-settings>=2.2.1
+
+# Google Generative AI (Gemini)
+google-generativeai>=0.4.0
+
+# Deepgram SDK
+deepgram-sdk>=3.3.0
+
+# Firebase Admin SDK for Authentication
+firebase-admin>=6.3.0 
