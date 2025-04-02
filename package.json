@@ -1,0 +1,31 @@
+{
+  "name": "medical-consultation-app",
+  "version": "1.0.0",
+  "description": "A comprehensive medical consultation application",
+  "main": "index.js",
+  "scripts": {
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && python app.py",
+    "build": "cd frontend && npm ci && npm run build",
+    "deploy": "firebase deploy"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vikram-twodesign/mediate.git"
+  },
+  "keywords": [
+    "medical",
+    "consultation",
+    "healthcare",
+    "AI"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/vikram-twodesign/mediate/issues"
+  },
+  "homepage": "https://github.com/vikram-twodesign/mediate#readme",
+  "dependencies": {
+    "firebase-tools": "^13.31.1"
+  }
+} 
