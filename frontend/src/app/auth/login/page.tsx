@@ -19,7 +19,7 @@ export default function LoginPage() {
   const { login, googleSignIn, user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirectTo') || '/';
+  const redirectTo = searchParams?.get('redirectTo') || '/';
 
   // If user is already logged in, redirect to the redirectTo path or home
   useEffect(() => {

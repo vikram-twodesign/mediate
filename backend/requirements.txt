@@ -17,4 +17,35 @@ google-generativeai>=0.4.0
 deepgram-sdk>=3.3.0
 
 # Firebase Admin SDK for Authentication
-firebase-admin>=6.3.0 
+firebase-admin>=6.3.0
+
+# Google Cloud AI Platform
+google-cloud-aiplatform>=0.1.0
+
+# Google Cloud Storage
+google-cloud-storage>=0.1.0
+
+# Pydantic
+pydantic>=2.4.2
+
+# HTTPX
+httpx>=0.25.2
+
+# Websockets
+websockets>=1.5.0
+
+# Requests
+requests>=2.31.0
+
+# Certifi
+certifi>=2023.7.22
+
+# Urllib3
+urllib3>=2.0.4
+
+# For NLP/Analysis (if used directly)
+# spacy
+# nltk
+
+# Add this line for form data parsing (file uploads)
+python-multipart>=0.0.6 

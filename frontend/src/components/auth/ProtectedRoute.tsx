@@ -16,7 +16,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   useEffect(() => {
     if (!loading && !user) {
       // User is not authenticated, redirect to login page with redirect back path
-      router.push(`/auth/login?redirectTo=${encodeURIComponent(pathname)}`);
+      // Ensure pathname is a string before encoding, default to '/' if null
+      const redirectPath = pathname || '/';
+      router.push(`/auth/login?redirectTo=${encodeURIComponent(redirectPath)}`);
     }
   }, [user, loading, router, pathname]);
 

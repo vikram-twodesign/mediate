@@ -6,8 +6,7 @@ from app.ssl_fix import apply_ssl_fixes
 apply_ssl_fixes()
 
 # --- Firebase Admin SDK ---
-import firebase_admin
-from firebase_admin import credentials
+from firebase_admin import credentials, initialize_app
 import os
 # --- End Firebase Admin SDK ---
 
@@ -29,23 +28,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # --- Firebase Initialization ---
+# In Cloud Run, it automatically uses the service account credentials
+# No need to specify GOOGLE_APPLICATION_CREDENTIALS unless using a custom SA
 try:
-    # Get the path to the service account key from the environment variable
-    cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-    if not cred_path:
-        logger.warning("GOOGLE_APPLICATION_CREDENTIALS environment variable not set. Firebase Admin SDK will not be initialized.")
-        # Depending on your requirements, you might want to raise an error here if Firebase is critical
-        # raise ValueError("GOOGLE_APPLICATION_CREDENTIALS is not set")
-        firebase_app = None
-    elif not os.path.exists(cred_path):
-        logger.error(f"Firebase credentials file not found at path: {cred_path}")
-        firebase_app = None
-    else:
-        cred = credentials.Certificate(cred_path)
-        firebase_app = firebase_admin.initialize_app(cred)
-        logger.info("Firebase Admin SDK initialized successfully.")
+    firebase_app = initialize_app()
+    logger.info("Firebase Admin SDK initialized successfully using default environment credentials.")
 except Exception as e:
-    logger.error(f"Error initializing Firebase Admin SDK: {e}", exc_info=True)
+    logger.error(f"Error initializing Firebase Admin SDK with default credentials: {e}", exc_info=True)
     firebase_app = None
 # --- End Firebase Initialization ---
 
