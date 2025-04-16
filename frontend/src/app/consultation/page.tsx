@@ -29,8 +29,13 @@ const initialTranscript: TranscriptLine[] = [
 // In Next.js, frontend environment variables must be prefixed with NEXT_PUBLIC_
 // This should be set in .env.local as NEXT_PUBLIC_API_URL=http://localhost:8000
 // For production, set in your deployment environment to the actual backend URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-console.log('Backend API URL:', API_BASE_URL); // Debug log
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
+
+if (!API_BASE_URL) {
+  console.error("FATAL ERROR: NEXT_PUBLIC_API_URL is not defined. Check environment variables.");
+  // In a real component, you might want to show an error state to the user
+  // instead of just logging to the console.
+}
 
 // Define type for Analysis Data
 // Update symptom structure
@@ -98,18 +103,38 @@ function ConsultationWorkspace() {
   // Current transcription line ID for real-time updates
   const currentLineIdRef = useRef<number>(0);
   
-  // Helper functions for speaker detection
-  const extractSpeakerFromText = (text: string): string | undefined => {
-    if (text.startsWith("Doctor:")) return "Doctor";
-    if (text.startsWith("Patient:")) return "Patient";
-    if (text.startsWith("Speaker 0:")) return "Doctor";
-    if (text.startsWith("Speaker 1:")) return "Patient";
-    return undefined;
+  // Add useEffect to log API_BASE_URL in the browser
+  useEffect(() => {
+    console.log('BROWSER CHECK - API_BASE_URL:', API_BASE_URL);
+  }, []); // Empty dependency array ensures this runs only once on mount
+
+  // -- HELPER FUNCTIONS --
+
+  // Determine WebSocket URL based on the API base URL
+  // Define this BEFORE setupWebSocket
+  const getWebSocketUrl = () => {
+    if (!API_BASE_URL) {
+        console.error("Cannot determine WebSocket URL because API_BASE_URL is not set.");
+        return null; // Return null if base URL isn't set
+    }
+    // Replace http/https with ws/wss
+    const wsProtocol = API_BASE_URL.startsWith('https') ? 'wss' : 'ws';
+    // Remove protocol part and append WebSocket path
+    const wsUrl = `${wsProtocol}://${API_BASE_URL.replace(/^https?:\/\//, '')}/ws/transcribe`;
+    console.log(`Calculated WebSocket URL: ${wsUrl}`); // Log the calculated WS URL
+    return wsUrl;
   };
-  
+
+  // Other helper functions (extractSpeakerFromText, removeSpeakerPrefix)
+  const extractSpeakerFromText = (text: string): string | undefined => {
+      // Simple extraction logic (improve as needed)
+      const match = text.match(/^(Speaker \d+):/);
+      return match ? match[1] : undefined;
+  };
+
   const removeSpeakerPrefix = (text: string): string => {
-    // Remove speaker prefixes like "Doctor: " or "Patient: "
-    return text.replace(/^(Doctor|Patient|Speaker \d+):\s*/i, "");
+      // Simple removal logic
+      return text.replace(/^(Speaker \d+):\s*/, '');
   };
 
   // Cleanup function for media recorder and WebSocket
@@ -137,10 +162,9 @@ function ConsultationWorkspace() {
   /**
    * Sets up WebSocket connection with retry logic and fallbacks
    * @returns WebSocket connection for transcription
+   * @throws Error if WebSocket URL cannot be determined or connection fails
    */
   const setupWebSocket = (): WebSocket => {
-    let wsUrl;
-
     // Close existing connection if there is one
     if (websocketRef.current) {
       try {
@@ -150,19 +174,20 @@ function ConsultationWorkspace() {
       }
     }
 
-    try {
-      // Use the backend API_BASE_URL to connect to the WebSocket
-      // Generate a unique consultation ID to keep transcriptions separate
-      const consultationId = `consultation-${Date.now()}`;
-      
-      // Try connecting directly to the backend WebSocket endpoint we created
-      // Ensure NEXT_PUBLIC_API_URL is set correctly in frontend/.env.local
-      // e.g., NEXT_PUBLIC_API_URL=http://localhost:8000
-      const wsBaseUrl = API_BASE_URL.replace(/^http/, 'ws'); // Convert http(s):// to ws(s)://
-      wsUrl = `${wsBaseUrl}/ws/transcribe`; // Use the correct endpoint path
-      // wsUrl = 'ws://localhost:8000/ws/transcribe'; // Hardcoded alternative if env var is tricky
-      console.log(`Attempting WebSocket connection to backend at ${wsUrl}`);
+    // Get the WebSocket URL using the helper function which includes checks
+    const wsUrl = getWebSocketUrl();
 
+    if (!wsUrl) {
+        const errorMsg = "Cannot setup WebSocket: API_BASE_URL is not configured.";
+        console.error(errorMsg);
+        setError(errorMsg); // Update UI state if possible
+        throw new Error(errorMsg); // Throw error to prevent proceeding
+    }
+
+    // wsUrl is guaranteed to be a string here
+    console.log(`Attempting WebSocket connection to backend at ${wsUrl}`);
+
+    try {
       const newWs = new WebSocket(wsUrl);
       
       newWs.onopen = () => {
@@ -442,51 +467,37 @@ function ConsultationWorkspace() {
     
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
-        // Setup WebSocket first to ensure connection is ready
-        const websocket = setupWebSocket();
-        
-        // Wait briefly for WebSocket connection to be established
-        let connectionTimeout = 5; // 5 retries with 300ms intervals = 1.5 seconds max
-        while (websocket.readyState !== WebSocket.OPEN && connectionTimeout > 0) {
-          console.log(`Waiting for WebSocket connection, state: ${websocket.readyState}, retries left: ${connectionTimeout}`);
-          await new Promise(resolve => setTimeout(resolve, 300));
-          connectionTimeout--;
-        }
-        
-        // Check if we have a connection before proceeding
-        if (websocket.readyState !== WebSocket.OPEN) {
-          console.warn("Failed to establish WebSocket connection. Using mock transcription instead.");
-          
-          // Get microphone access just for the UI experience
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          
-          // Start recording to keep the UI consistent
-          const mediaRecorder = new MediaRecorder(stream);
-          mediaRecorderRef.current = mediaRecorder;
-          mediaRecorder.start();
-          
-          // Start the mock transcription
-          setIsRecording(true);
-          const mockTranscription = simulateTranscription();
-          
-          // Store the stop function
-          audioProcessingRef.current = {
-            audioContext: null,
-            stopProcessing: () => {
-              mockTranscription.stop();
-              stream.getTracks().forEach(track => track.stop());
-            }
-          };
-          
-          return; // Exit early and use mock transcription
-        }
-        
-        console.log("WebSocket connection confirmed open, proceeding with audio setup");
-        
-        // Get microphone access
+        // 1. Get Microphone Access
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
-        // Setup audio processing and streaming
+
+        // 2. Setup WebSocket Connection
+        const websocket = setupWebSocket(); // Call setupWebSocket first
+        websocketRef.current = websocket; // Store the created websocket in the ref
+
+        // 3. Wait for WebSocket connection to be established before setting up audio
+        const MAX_RETRIES = 30; // Increased from 10 to 30
+        const RETRY_DELAY_MS = 1000; // 1 second delay
+
+        let retries = MAX_RETRIES;
+        // Use the 'websocket' variable returned by setupWebSocket()
+        while (websocket.readyState !== WebSocket.OPEN && retries > 0) {
+          console.log(`Waiting for WebSocket connection, state: ${websocket.readyState}, retries left: ${retries}`);
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+          retries--;
+        }
+
+        // 4. Check if connection succeeded after retries
+        if (websocket.readyState !== WebSocket.OPEN) {
+          console.warn("Failed to establish WebSocket connection after retries. Using mock transcription instead.");
+          setError("Could not connect to transcription service. Using demo mode.");
+          // Optionally stop the stream if we failed to connect
+          stream.getTracks().forEach(track => track.stop());
+          // Start simulation if connection fails
+          simulateTranscription();
+          return; // Exit the function
+        }
+
+        // 5. Setup Audio Processing (only if WebSocket connected)
         const audioProcessing = setupAudioProcessing(stream, websocket);
         audioProcessingRef.current = audioProcessing;
         
