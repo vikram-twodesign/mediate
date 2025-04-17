@@ -192,7 +192,8 @@
    - [x] 8.4.4. Create user documentation and training materials
 
 ### Critical Deployment Issue (April 2nd, 2025):
-- **[ ] 8.5 Fix Frontend API URL Configuration:** The deployed frontend application at `https://medicap-455306.web.app` is currently attempting to connect to the backend at `http://localhost:8000` instead of the deployed Cloud Run URL (`https://medical-consultation-backend-863825613805.us-central1.run.app`). This seems to be caused by the build process not correctly embedding the production environment variable (`NEXT_PUBLIC_API_URL` from `.env.production`) during the `npm run build` step before deployment. This needs urgent investigation and resolution.
+- **[x] 8.5 Fix Frontend API URL Configuration:** The deployed frontend application at `https://medicap-455306.web.app` is currently attempting to connect to the backend at `http://localhost:8000` instead of the deployed Cloud Run URL (`https://medical-consultation-backend-863825613805.us-central1.run.app`). This seems to be caused by the build process not correctly embedding the production environment variable (`NEXT_PUBLIC_API_URL` from `.env.production`) during the `npm run build` step before deployment. This needs urgent investigation and resolution.
+  - **Resolution:** Modified the build script (`npm run build`) in `frontend/package.json` to explicitly load `.env.production` using `dotenv-cli`. Also removed hardcoded localhost fallbacks in the code and increased the WebSocket connection timeout in the frontend (`frontend/src/app/consultation/page.tsx`) to handle Cloud Run cold starts.
 
 ## Phase 9: Maintenance & Evolution
 - [x] 9.1. Implement analytics and usage tracking

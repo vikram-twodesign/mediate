@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Microscope, Stethoscope, User, LogOut, ChevronDown } from 'lucide-react'
+import { Stethoscope, User, LogOut, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -45,9 +45,8 @@ export function Header() {
   return (
     <header className="border-b border-gray-200 bg-white shadow-sm fixed w-full top-0 z-10">
       <div className="container flex h-16 items-center justify-between px-4 md:px-6">
-        <Link href="/" className="flex items-center gap-2">
-          <Microscope className="h-6 w-6 text-blue-600" />
-          <span className="text-xl font-bold text-gray-800">Medical Consultation Assistant</span>
+        <Link href="/" className="flex items-center">
+          <span className="text-xl font-bold text-gray-800">Mediate</span>
         </Link>
         <nav className="hidden md:flex gap-6">
           <Link 

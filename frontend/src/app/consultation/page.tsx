@@ -656,148 +656,95 @@ function ConsultationWorkspace() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 overflow-hidden">
-        {/* Left Column: Transcript */}
-        <Card className="lg:col-span-7 flex flex-col border-none shadow-sm overflow-hidden">
-          <CardHeader className="bg-white p-4 pb-2 flex flex-row justify-between items-center border-b">
-            <div>
-              <CardTitle className="text-gray-800">Live Transcription</CardTitle>
-              <CardDescription className="text-gray-500">
-                  {isRecording ? "Recording in progress..." : "Start consultation to begin recording."}
-              </CardDescription>
-            </div>
-            {analysis.severity && (
-                <SeverityBadge severity={analysis.severity} />
-            )}
-          </CardHeader>
-          <CardContent className="bg-white flex-1 p-4 overflow-auto">
-            {/* Display Error Message */}
-            {error && <p className="mb-4 text-sm text-red-600">Error: {error}</p>}
-
-            {/* Display Transcript Lines */}
-            {transcript.map((line) => {
-              // Determine speaker number from label for consistent coloring
-              let speakerIdForColor = 0;
-              if (line.speaker) {
-                  const match = line.speaker.match(/\d+/);
-                  if (match) {
-                      speakerIdForColor = parseInt(match[0], 10) - 1; // Get 0, 1, 2...
-                  }
-              }
-              // Assign color based on speaker number (e.g., even/odd)
-              const colorClass = speakerIdForColor % 2 === 0 
-                  ? 'text-blue-700' 
-                  : 'text-emerald-700';
-                  
-              return (
-                  <p key={line.id} className="mb-3 text-sm leading-relaxed text-gray-800">
-                  {line.speaker ? (
-                      <>
-                      <span className={`font-semibold ${colorClass}`}>
-                          {line.speaker}:
-                      </span>{' '}
-                      {line.text}
-                      </>
-                  ) : (
-                      line.text // Should not happen if backend always sends speaker
-                  )}
-                  </p>
-              );
-            })}
-
-            {/* Display Loading/Listening Indicators */} 
-            {isRecording && transcript.length === 0 && !error && (
-              <p className="text-blue-600 italic mt-4">Listening...</p>
-            )}
-            {isProcessing && (
-              <p className="text-gray-500 italic mt-4 flex items-center">
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Transcribing audio...
-              </p>
-            )}
-            {!isRecording && !isProcessing && transcript.length === 0 && !error && (
-              <p className="text-gray-500 italic mt-4">Transcription will appear here.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Right Column: Analysis Cards */}
-        <div className="lg:col-span-5 flex flex-col gap-5 overflow-hidden">
-          {/* Suggested Questions Card */}
-          <Card className="flex flex-col flex-grow border-none shadow-sm bg-gradient-to-br from-blue-50 to-white overflow-hidden">
-            <CardHeader className="p-4 pb-2 border-b border-blue-100 flex-shrink-0">
-              <CardTitle className="text-blue-800 flex items-center gap-2 text-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600">
-                  <circle cx="12" cy="12" r="10"/>
-                  <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                  <path d="M12 17h.01"/>
-                </svg>
-                Suggested Questions
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-3 overflow-auto flex-grow">
-              {analysis.suggestions.length > 0 ? (
-                <ul className="space-y-2.5">
-                {analysis.suggestions.map((suggestion, index) => (
-                    <li key={index} className="flex items-start gap-2 text-gray-800">
-                      <span className="flex-shrink-0 h-5 w-5 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center text-xs font-medium">
-                        {index + 1}
-                      </span>
-                      <span className="text-sm">{suggestion}</span>
-                    </li>
-                ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-gray-500 italic flex items-center justify-center h-16">
-                  {isRecording ? "Analyzing conversation..." : "No suggestions available yet."}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Symptoms Card */}
-          <Card className="flex flex-col flex-grow border-none shadow-sm overflow-hidden">
-            <CardHeader className="p-4 pb-2 border-b flex-shrink-0">
-              <CardTitle className="text-gray-800 flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600">
-                  <path d="M8 19h8a4 4 0 0 0 3.8-2.8 4 4 0 0 0-1.6-4.5c1-1.1 1-2.7 0-3.8-.7-.8-1.7-1.1-2.7-1-1-.7-2.4-.7-3.4 0-.3-.2-.7-.2-1 0-1-.7-2.4-.7-3.4 0-1-.1-2 .2-2.7 1-1 1.1-1 2.7 0 3.8a4 4 0 0 0-1.6 4.5A4 4 0 0 0 8 19Z"/>
-                  <path d="M12 3v4"/>
-                </svg>
-                Detected Symptoms
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 pt-3 overflow-auto bg-white flex-grow">
-              {analysis.symptoms.length > 0 ? (
-                <ul className="space-y-1.5">
-                  {analysis.symptoms.map((symptom, index) => (
-                    <li key={index} className="flex items-center gap-2 text-gray-800">
-                      <span className={`h-1.5 w-1.5 rounded-full ${symptom.is_primary ? 'bg-red-500' : 'bg-gray-400'}`}></span>
-                      <span className={`text-sm ${symptom.is_primary ? 'font-medium' : ''}`}>{symptom.description}</span>
-                    </li>
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5 overflow-hidden">
+        {/* Severity Badge - Always at top */}
+        {analysis.severity && (
+          <div className="lg:col-span-12 flex">
+            <SeverityBadge severity={analysis.severity} />
+          </div>
+        )}
+        
+        {/* Analysis Cards - Full width on mobile, 8/12 on desktop */}
+        <div className="lg:col-span-8 grid grid-cols-1 gap-5">
+          {/* Top Row: Two-column layout on tablets and up */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            {/* Suggested Questions Card */}
+            <Card className="flex flex-col border-none shadow-sm bg-gradient-to-br from-blue-50 to-white overflow-hidden min-h-[250px]">
+              <CardHeader className="p-3 sm:p-4 pb-2 border-b border-blue-100 flex-shrink-0">
+                <CardTitle className="text-blue-800 flex items-center gap-2 text-base sm:text-lg">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600 flex-shrink-0">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                    <path d="M12 17h.01"/>
+                  </svg>
+                  <span className="truncate">Suggested Questions</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3 sm:p-4 pt-2 overflow-auto flex-grow">
+                {analysis.suggestions.length > 0 ? (
+                  <ul className="space-y-2">
+                  {analysis.suggestions.map((suggestion, index) => (
+                      <li key={index} className="flex items-start gap-2 text-gray-800">
+                        <span className="flex-shrink-0 h-5 w-5 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center text-xs font-medium">
+                          {index + 1}
+                        </span>
+                        <span className="text-sm">{suggestion}</span>
+                      </li>
                   ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-gray-500 italic flex items-center justify-center h-16">
-                  {isRecording ? "Analyzing symptoms..." : "No symptoms detected yet."}
-                </p>
-              )}
-            </CardContent>
-          </Card>
+                  </ul>
+                ) : (
+                  <p className="text-sm text-gray-500 italic flex items-center justify-center h-16">
+                    {isRecording ? "Analyzing conversation..." : "No suggestions available yet."}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Symptoms Card */}
+            <Card className="flex flex-col border-none shadow-sm bg-gradient-to-br from-red-50 to-white overflow-hidden min-h-[250px]">
+              <CardHeader className="p-3 sm:p-4 pb-2 border-b border-red-100 flex-shrink-0">
+                <CardTitle className="text-red-800 flex items-center gap-2 text-base sm:text-lg">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600 flex-shrink-0">
+                    <path d="M8 19h8a4 4 0 0 0 3.8-2.8 4 4 0 0 0-1.6-4.5c1-1.1 1-2.7 0-3.8-.7-.8-1.7-1.1-2.7-1-1-.7-2.4-.7-3.4 0-.3-.2-.7-.2-1 0-1-.7-2.4-.7-3.4 0-1-.1-2 .2-2.7 1-1 1.1-1 2.7 0 3.8a4 4 0 0 0-1.6 4.5A4 4 0 0 0 8 19Z"/>
+                    <path d="M12 3v4"/>
+                  </svg>
+                  <span className="truncate">Detected Symptoms</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3 sm:p-4 pt-2 overflow-auto bg-white flex-grow">
+                {analysis.symptoms.length > 0 ? (
+                  <ul className="space-y-1.5">
+                    {analysis.symptoms.map((symptom, index) => (
+                      <li key={index} className="flex items-center gap-2 text-gray-800">
+                        <span className={`h-1.5 w-1.5 rounded-full ${symptom.is_primary ? 'bg-red-500' : 'bg-gray-400'}`}></span>
+                        <span className={`text-sm ${symptom.is_primary ? 'font-medium' : ''}`}>{symptom.description}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-gray-500 italic flex items-center justify-center h-16">
+                    {isRecording ? "Analyzing symptoms..." : "No symptoms detected yet."}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
           
           {/* Possible Diagnoses Card */}
-          <Card className="flex flex-col flex-grow border-none shadow-sm bg-gradient-to-br from-purple-50 to-white overflow-hidden">
-            <CardHeader className="p-4 pb-2 border-b border-purple-100 flex-shrink-0">
-              <CardTitle className="text-purple-800 flex items-center gap-2 text-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-600">
+          <Card className="flex flex-col border-none shadow-sm bg-gradient-to-br from-purple-50 to-white overflow-hidden">
+            <CardHeader className="p-3 sm:p-4 pb-2 border-b border-purple-100 flex-shrink-0">
+              <CardTitle className="text-purple-800 flex items-center gap-2 text-base sm:text-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-600 flex-shrink-0">
                   <path d="M21 2H3v4h18V2z"/>
                   <path d="M21 10H3v4h18v-4z"/>
                   <path d="M21 18H3v4h18v-4z"/>
                   <path d="M3 2v20"/>
                   <path d="M21 2v20"/>
                 </svg>
-                Possible Diagnoses
+                <span className="truncate">Possible Diagnoses</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 pt-3 overflow-auto flex-grow">
+            <CardContent className="p-3 sm:p-4 pt-2 overflow-auto flex-grow">
               {analysis.diagnoses && analysis.diagnoses.length > 0 ? (
                 <ul className="space-y-3">
                   {analysis.diagnoses.map((diagnosis, index) => {
@@ -845,6 +792,142 @@ function ConsultationWorkspace() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Transcript - Only visible on desktop */}
+        <Card className="hidden lg:flex lg:col-span-4 flex-col border-none shadow-sm overflow-hidden h-[calc(100vh-18rem)]">
+          <CardHeader className="bg-white p-4 pb-2 flex flex-row justify-between items-center border-b">
+            <div>
+              <CardTitle className="text-gray-800 text-sm">Live Transcription</CardTitle>
+              <CardDescription className="text-gray-500 text-xs">
+                  {isRecording ? "Recording in progress..." : "Start consultation to begin recording."}
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="bg-white flex-1 p-4 overflow-auto">
+            {/* Display Error Message */}
+            {error && <p className="mb-4 text-xs text-red-600">Error: {error}</p>}
+
+            {/* Display Transcript Lines */}
+            {transcript.map((line) => {
+              // Determine speaker number from label for consistent coloring
+              let speakerIdForColor = 0;
+              if (line.speaker) {
+                  const match = line.speaker.match(/\d+/);
+                  if (match) {
+                      speakerIdForColor = parseInt(match[0], 10) - 1; // Get 0, 1, 2...
+                  }
+              }
+              // Assign color based on speaker number (e.g., even/odd)
+              const colorClass = speakerIdForColor % 2 === 0 
+                  ? 'text-blue-700' 
+                  : 'text-emerald-700';
+                  
+              return (
+                  <p key={line.id} className="mb-2 text-xs leading-relaxed text-gray-800">
+                  {line.speaker ? (
+                      <>
+                      <span className={`font-semibold ${colorClass}`}>
+                          {line.speaker}:
+                      </span>{' '}
+                      {line.text}
+                      </>
+                  ) : (
+                      line.text // Should not happen if backend always sends speaker
+                  )}
+                  </p>
+              );
+            })}
+
+            {/* Display Loading/Listening Indicators */} 
+            {isRecording && transcript.length === 0 && !error && (
+              <p className="text-blue-600 italic mt-4 text-xs">Listening...</p>
+            )}
+            {isProcessing && (
+              <p className="text-gray-500 italic mt-4 flex items-center text-xs">
+                  <Loader2 className="mr-2 h-3 w-3 animate-spin" /> Transcribing audio...
+              </p>
+            )}
+            {!isRecording && !isProcessing && transcript.length === 0 && !error && (
+              <p className="text-gray-500 italic mt-4 text-xs">Transcription will appear here.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Mobile Expand/Collapse Toggle for Transcript */}
+        <div className="lg:hidden w-full">
+          <Button 
+            variant="outline" 
+            className="w-full text-sm flex items-center justify-center gap-2 py-1"
+            onClick={() => {
+              const transcriptDialog = document.getElementById('mobile-transcript-dialog');
+              if (transcriptDialog) {
+                (transcriptDialog as HTMLDialogElement).showModal();
+              }
+            }}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+            View Live Transcript
+          </Button>
+
+          {/* Mobile Transcript Dialog */}
+          <dialog id="mobile-transcript-dialog" className="w-full max-w-full h-full max-h-full p-0 m-0 rounded-lg">
+            <div className="flex flex-col h-full bg-white">
+              <div className="p-4 border-b flex justify-between items-center">
+                <h3 className="font-medium">Live Transcript</h3>
+                <button 
+                  onClick={() => {
+                    const transcriptDialog = document.getElementById('mobile-transcript-dialog');
+                    if (transcriptDialog) {
+                      (transcriptDialog as HTMLDialogElement).close();
+                    }
+                  }}
+                  className="p-1"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6 6 18"></path>
+                    <path d="m6 6 12 12"></path>
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 p-4 overflow-auto">
+                {transcript.map((line) => {
+                  let speakerIdForColor = 0;
+                  if (line.speaker) {
+                    const match = line.speaker.match(/\d+/);
+                    if (match) {
+                      speakerIdForColor = parseInt(match[0], 10) - 1;
+                    }
+                  }
+                  const colorClass = speakerIdForColor % 2 === 0 
+                    ? 'text-blue-700' 
+                    : 'text-emerald-700';
+                    
+                  return (
+                    <p key={line.id} className="mb-2 text-sm leading-relaxed text-gray-800">
+                      {line.speaker ? (
+                        <>
+                          <span className={`font-semibold ${colorClass}`}>
+                            {line.speaker}:
+                          </span>{' '}
+                          {line.text}
+                        </>
+                      ) : (
+                        line.text
+                      )}
+                    </p>
+                  );
+                })}
+                {transcript.length === 0 && (
+                  <p className="text-sm text-gray-500 italic text-center mt-8">
+                    {isRecording ? "Listening..." : "No transcript available yet."}
+                  </p>
+                )}
+              </div>
+            </div>
+          </dialog>
+        </div>
       </div>
     </div>
   );
@@ -862,42 +945,45 @@ const SeverityBadge: React.FC<SeverityBadgeProps> = ({ severity }) => {
   const rationale = severity?.rationale || '';
   const severityLower = level.toLowerCase(); 
 
-  let colorClasses = "bg-gray-100 text-gray-800"; // Default
-  let IconComponent = AlertTriangle; // Default icon
+  let colorClasses = "bg-gray-100 text-gray-800 border-gray-200"; // Default
+  let bgGradient = "from-gray-50 to-gray-100";
+  let IconComponent = Info; // Default icon
 
   switch (severityLower) {
     case 'low':
-      colorClasses = "bg-green-100 text-green-800";
-      // IconComponent can remain default or be set to something neutral like Info
+      colorClasses = "bg-green-100 text-green-800 border-green-200";
+      bgGradient = "from-green-50 to-green-100";
       IconComponent = Info;
       break;
     case 'medium':
-      colorClasses = "bg-yellow-100 text-yellow-800";
-      IconComponent = AlertTriangle; // Explicitly set for medium
+      colorClasses = "bg-yellow-100 text-yellow-800 border-yellow-200";
+      bgGradient = "from-yellow-50 to-yellow-100";
+      IconComponent = AlertTriangle;
       break;
     case 'high':
-      colorClasses = "bg-orange-100 text-orange-800";
+      colorClasses = "bg-orange-100 text-orange-800 border-orange-200";
+      bgGradient = "from-orange-50 to-orange-100";
       IconComponent = AlertTriangle;
       break;
     case 'urgent':
-      colorClasses = "bg-red-100 text-red-800";
+      colorClasses = "bg-red-100 text-red-800 border-red-200";
+      bgGradient = "from-red-50 to-red-100";
       IconComponent = AlertTriangle;
       break;
   }
 
   return (
     <div className="group relative">
-      <Badge className={`text-sm font-medium ${colorClasses} px-3 py-1.5 flex items-center gap-1.5 cursor-default`}>
-        <IconComponent className="h-4 w-4" />
-        <span>Severity: {level}</span>
-      </Badge>
-      {rationale && (
-        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-max max-w-xs 
-                      bg-gray-900 text-white text-xs rounded py-1 px-2 z-10 opacity-0 
-                      group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-          {rationale}
+      <div className={`w-full rounded-md shadow-sm border ${colorClasses} px-3 py-2 flex items-center gap-2 cursor-help`}>
+        <IconComponent className="h-5 w-5" />
+        <div className="flex items-center gap-1.5">
+          <span className="font-medium">Severity:</span>
+          <span className="font-bold">{level}</span>
+          {rationale && (
+            <span className="ml-2 text-xs opacity-70 hidden sm:inline-block">({rationale})</span>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }; 

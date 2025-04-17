@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Stethoscope, Microscope, FileText, BarChart3, FileQuestion } from 'lucide-react'
+import { Stethoscope, FileText, BarChart3, FileQuestion } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card'
 
@@ -10,7 +10,7 @@ export default function Home() {
     <div className="container mx-auto p-8">
       <div className="mb-8 text-center max-w-4xl mx-auto">
         <h1 className="text-4xl font-bold tracking-tight mb-4">
-          Medical Consultation Assistant
+          Mediate
         </h1>
         <p className="text-lg text-gray-600 mb-8">
           Enhance doctor-patient consultations with AI-powered transcription, 
@@ -38,7 +38,7 @@ export default function Home() {
             
             <div className="grid gap-4">
               <div className="flex items-start gap-3">
-                <Microscope className="h-5 w-5 text-blue-600 mt-0.5" />
+                <Stethoscope className="h-5 w-5 text-blue-600 mt-0.5" />
                 <div>
                   <h3 className="font-medium">Live Transcription</h3>
                   <p className="text-sm text-gray-600">Record and transcribe doctor-patient conversations in real-time</p>
