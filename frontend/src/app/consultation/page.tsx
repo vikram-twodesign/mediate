@@ -586,7 +586,7 @@ function ConsultationWorkspace() {
   };
 
   return (
-    <div className="container mx-auto p-6 flex flex-col h-[calc(100vh-4rem)] gap-6 bg-gray-50">
+    <div className="container mx-auto p-6 flex flex-col min-h-[calc(100vh-4rem)] gap-6 bg-gray-50 overflow-y-auto pb-24">
       {/* Top Row: Patient Info, Document Upload & Controls */}
       <div className="flex flex-col md:flex-row flex-wrap gap-4">
         {/* Patient Info Section */}
@@ -656,7 +656,7 @@ function ConsultationWorkspace() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5 overflow-hidden">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Severity Badge - Always at top */}
         {analysis.severity && (
           <div className="lg:col-span-12 flex">
@@ -669,7 +669,7 @@ function ConsultationWorkspace() {
           {/* Top Row: Two-column layout on tablets and up */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {/* Suggested Questions Card */}
-            <Card className="flex flex-col border-none shadow-sm bg-gradient-to-br from-blue-50 to-white overflow-hidden min-h-[250px]">
+            <Card className="flex flex-col border-none shadow-sm bg-gradient-to-br from-blue-50 to-white overflow-hidden min-h-[200px]">
               <CardHeader className="p-3 sm:p-4 pb-2 border-b border-blue-100 flex-shrink-0">
                 <CardTitle className="text-blue-800 flex items-center gap-2 text-base sm:text-lg">
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600 flex-shrink-0">
@@ -701,7 +701,7 @@ function ConsultationWorkspace() {
             </Card>
 
             {/* Symptoms Card */}
-            <Card className="flex flex-col border-none shadow-sm bg-gradient-to-br from-red-50 to-white overflow-hidden min-h-[250px]">
+            <Card className="flex flex-col border-none shadow-sm bg-gradient-to-br from-red-50 to-white overflow-hidden min-h-[200px]">
               <CardHeader className="p-3 sm:p-4 pb-2 border-b border-red-100 flex-shrink-0">
                 <CardTitle className="text-red-800 flex items-center gap-2 text-base sm:text-lg">
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600 flex-shrink-0">
@@ -731,7 +731,7 @@ function ConsultationWorkspace() {
           </div>
           
           {/* Possible Diagnoses Card */}
-          <Card className="flex flex-col border-none shadow-sm bg-gradient-to-br from-purple-50 to-white overflow-hidden">
+          <Card className="flex flex-col border-none shadow-sm bg-gradient-to-br from-purple-50 to-white overflow-hidden min-h-[200px] mb-6">
             <CardHeader className="p-3 sm:p-4 pb-2 border-b border-purple-100 flex-shrink-0">
               <CardTitle className="text-purple-800 flex items-center gap-2 text-base sm:text-lg">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-600 flex-shrink-0">
@@ -794,7 +794,7 @@ function ConsultationWorkspace() {
         </div>
 
         {/* Transcript - Only visible on desktop */}
-        <Card className="hidden lg:flex lg:col-span-4 flex-col border-none shadow-sm overflow-hidden h-[calc(100vh-18rem)]">
+        <Card className="hidden lg:flex lg:col-span-4 flex-col border-none shadow-sm overflow-hidden max-h-[calc(100vh-18rem)]">
           <CardHeader className="bg-white p-4 pb-2 flex flex-row justify-between items-center border-b">
             <div>
               <CardTitle className="text-gray-800 text-sm">Live Transcription</CardTitle>
@@ -854,10 +854,10 @@ function ConsultationWorkspace() {
         </Card>
 
         {/* Mobile Expand/Collapse Toggle for Transcript */}
-        <div className="lg:hidden w-full">
+        <div className="lg:hidden fixed bottom-6 right-6 z-10 shadow-lg rounded-full">
           <Button 
-            variant="outline" 
-            className="w-full text-sm flex items-center justify-center gap-2 py-1"
+            variant="default" 
+            className="rounded-full w-14 h-14 flex items-center justify-center bg-blue-600 text-white shadow-md"
             onClick={() => {
               const transcriptDialog = document.getElementById('mobile-transcript-dialog');
               if (transcriptDialog) {
@@ -865,14 +865,13 @@ function ConsultationWorkspace() {
               }
             }}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
             </svg>
-            View Live Transcript
           </Button>
 
           {/* Mobile Transcript Dialog */}
-          <dialog id="mobile-transcript-dialog" className="w-full max-w-full h-full max-h-full p-0 m-0 rounded-lg">
+          <dialog id="mobile-transcript-dialog" className="w-full max-w-full h-full max-h-full p-0 m-0 rounded-lg backdrop:bg-black backdrop:bg-opacity-50">
             <div className="flex flex-col h-full bg-white">
               <div className="p-4 border-b flex justify-between items-center">
                 <h3 className="font-medium">Live Transcript</h3>

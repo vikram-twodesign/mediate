@@ -23,7 +23,7 @@ export default function RootLayout({
         <ThemeProvider>
           <AuthProvider>
             <Header />
-            <main className="min-h-screen bg-gray-50 pt-16">
+            <main className="min-h-screen bg-gray-50 pt-16 overflow-x-hidden">
               {children}
             </main>
           </AuthProvider>
