@@ -1,68 +1,132 @@
 'use client'
 
-import { Badge } from '@/components/ui/badge'
+import { useState, useRef, useEffect } from 'react'
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+import {
+  Activity,
+  AlertCircle,
+  BarChart3,
+  CheckCircle,
+  Download,
+  FileText,
+  HelpCircle,
+  Layers,
+  Loader2,
+  MessageSquare,
+  Mic,
+  Pause,
+  Pencil,
+  Plus,
+  Share2,
+  Square,
+  Stethoscope,
+  Wand2,
+  X
+} from 'lucide-react'
+
+// UI Components
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
-import { UploadCloud, Mic, Square, Loader2, AlertTriangle, Info } from 'lucide-react'
-import { useState, useRef, useEffect } from 'react'
-import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+import { Badge } from '@/components/ui/badge'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Sheet, SheetClose, SheetContent, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Drawer, DrawerContent, DrawerTrigger } from '@/components/ui/drawer'
 
 // Define types for better state management
 interface TranscriptLine {
   id: number;
   text: string;
-  speaker?: string; // Optional: Add speaker later if needed
+  speaker?: string;
+  timestamp?: string;
 }
 
 // Placeholder data - Now used as initial state only
-const initialTranscript: TranscriptLine[] = [
-  // { id: 1, text: "Doctor: Good morning, Mrs. Davis. What brings you in today?" },
-  // { id: 2, text: "Patient: Good morning, Doctor. I've been having these persistent headaches for the past week, especially in the mornings." },
-  // ... other placeholders ...
-];
+const initialTranscript: TranscriptLine[] = [];
 
 // Get backend URL from environment variable or default
-// In Next.js, frontend environment variables must be prefixed with NEXT_PUBLIC_
-// This should be set in .env.local as NEXT_PUBLIC_API_URL=http://localhost:8000
-// For production, set in your deployment environment to the actual backend URL
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
 if (!API_BASE_URL) {
   console.error("FATAL ERROR: NEXT_PUBLIC_API_URL is not defined. Check environment variables.");
-  // In a real component, you might want to show an error state to the user
-  // instead of just logging to the console.
 }
 
-// Define type for Analysis Data
-// Update symptom structure
+// Define types for Analysis Data
 interface Symptom {
   description: string;
   is_primary: boolean;
 }
 
-// Update severity structure
 interface Severity {
   level: string;
   rationale: string;
 }
 
-// Update diagnosis structure
 interface Diagnosis {
   name: string;
   confidence: string;
   rationale: string;
 }
 
-// Update main AnalysisData interface
 interface AnalysisData {
   symptoms: Symptom[];
   suggestions: string[];
-  severity: Severity; // Updated structure
-  diagnoses: Diagnosis[]; // Updated structure
+  severity: Severity;
+  diagnoses: Diagnosis[];
+}
+
+// Add additional types for improved UI
+interface PatientInfo {
+  name: string;
+  id?: string;
+  age?: string;
+  gender?: string;
+  medicalHistory?: string;
+}
+
+// Report related interfaces
+interface ReportItem {
+  id: string;
+  type: 'symptom' | 'diagnosis' | 'recommendation' | 'context';
+  content: string;
+  approved: boolean;
+  isEditing?: boolean;
+}
+
+interface ReportSection {
+  title: string;
+  items: ReportItem[];
+}
+
+interface Report {
+  patientInfo: PatientInfo;
+  consultationDate: string;
+  consultationDuration: string;
+  sections: {
+    context: ReportSection;
+    symptoms: ReportSection;
+    diagnoses: ReportSection;
+    recommendations: ReportSection;
+  };
+  isApproved: boolean;
+  isGenerating: boolean;
 }
 
 export default function ConsultationPage() {
@@ -74,67 +138,434 @@ export default function ConsultationPage() {
 }
 
 function ConsultationWorkspace() {
+  // Core state management
   const [isRecording, setIsRecording] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false); // Loading state for transcription
-  const [patientName, setPatientName] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptLine[]>(initialTranscript);
-  const [error, setError] = useState<string | null>(null); // State for errors
-
-  // --- State for AI Analysis ---
-  // Update initial state for new structure
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('live');
+  
+  // Enhanced patient information
+  const [patientInfo, setPatientInfo] = useState<PatientInfo>({
+    name: '',
+    id: '',
+    age: '',
+    gender: ''
+  });
+  
+  // Analyses state with improved structure
   const [analysis, setAnalysis] = useState<AnalysisData>({
     symptoms: [],
     suggestions: [],
-    severity: { level: "Low", rationale: "" }, // Default severity object
+    severity: { level: "Low", rationale: "" },
     diagnoses: []
   });
-
+  
+  // UI state management
+  const [showMobileTranscript, setShowMobileTranscript] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  
+  // Report state
+  const [report, setReport] = useState<Report | null>(null);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  
   // Refs for audio recording
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  
-  // Add refs for WebSocket and audio context
   const websocketRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
-  // Update the type to allow for null AudioContext in mock mode
   const audioProcessingRef = useRef<{audioContext: AudioContext | null, stopProcessing: () => void} | null>(null);
-
-  // Current transcription line ID for real-time updates
   const currentLineIdRef = useRef<number>(0);
+  const recordingTimerRef = useRef<number | null>(null);
+  
+  // After recording stops, automatically switch to analysis tab
+  useEffect(() => {
+    if (!isRecording && transcript.length > 0) {
+      setActiveTab('analysis');
+    }
+  }, [isRecording, transcript.length]);
+  
+  // Generate report from current analysis and transcript
+  const generateReport = () => {
+    if (transcript.length === 0 || isRecording) {
+      setError("Cannot generate report while recording or with no transcript data");
+      return;
+    }
+    
+    setIsGeneratingReport(true);
+    
+    try {
+      // Create a new report based on current data
+      const now = new Date();
+      const formattedDate = now.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric', 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      });
+      
+      // Create a more meaningful consultation summary instead of using raw transcript
+      let consultationSummary = "";
+      
+      // Find symptoms mentioned in transcript to create a better summary
+      if (analysis.symptoms.length > 0) {
+        const primarySymptoms = analysis.symptoms
+          .filter(s => s.is_primary)
+          .map(s => s.description.toLowerCase());
+          
+        if (primarySymptoms.length > 0) {
+          consultationSummary = `Patient consultation regarding ${primarySymptoms.join(', ')}.`;
+        } else {
+          consultationSummary = `Patient consultation regarding ${analysis.symptoms[0].description.toLowerCase()}.`;
+        }
+      } else if (transcript.length > 10) {
+        // If we have transcript but no symptoms were identified, create a generic summary
+        consultationSummary = "Patient consultation for medical evaluation and advice.";
+      } else {
+        consultationSummary = "Brief patient consultation.";
+      }
+      
+      // Generate detailed recommendations based on diagnoses and symptoms
+      const recommendations: ReportItem[] = [];
+      
+      // Generate recommendations based on diagnoses if available
+      if (analysis.diagnoses.length > 0) {
+        // Primary diagnosis recommendation
+        const primaryDiagnosis = analysis.diagnoses[0];
+        
+        // Add recommendation for diagnostic confirmation
+        recommendations.push({
+          id: `rec-test-${Date.now()}`,
+          type: 'recommendation',
+          content: `Schedule the following diagnostic tests to confirm ${primaryDiagnosis.name}: complete blood count (CBC), comprehensive metabolic panel, and relevant imaging studies.`,
+          approved: false
+        });
+        
+        // Add medication recommendation
+        recommendations.push({
+          id: `rec-med-${Date.now()}`,
+          type: 'recommendation',
+          content: `Consider appropriate medication based on confirmed diagnosis. If ${primaryDiagnosis.name} is confirmed, standard treatment protocol should be followed.`,
+          approved: false
+        });
+        
+        // Add follow-up recommendation
+        recommendations.push({
+          id: `rec-followup-${Date.now()}`,
+          type: 'recommendation',
+          content: `Schedule follow-up appointment in 2 weeks to assess response to treatment and review test results.`,
+          approved: false
+        });
+      } else if (analysis.symptoms.length > 0) {
+        // If no diagnoses but we have symptoms, create symptom-based recommendations
+        recommendations.push({
+          id: `rec-symptom-${Date.now()}`,
+          type: 'recommendation',
+          content: `Conduct baseline diagnostic tests including CBC and metabolic panel to evaluate symptoms further.`,
+          approved: false
+        });
+        
+        recommendations.push({
+          id: `rec-monitor-${Date.now()}`,
+          type: 'recommendation',
+          content: `Patient advised to monitor symptoms and maintain detailed symptom diary.`,
+          approved: false
+        });
+        
+        recommendations.push({
+          id: `rec-followup-${Date.now()}`,
+          type: 'recommendation',
+          content: `Schedule follow-up within 7-10 days for reassessment.`,
+          approved: false
+        });
+      }
+      
+      // Default recommendation if none available
+      if (recommendations.length === 0) {
+        recommendations.push({
+          id: `rec-${Date.now()}`,
+          type: 'recommendation',
+          content: 'Routine follow-up with the patient within 2 weeks to monitor symptoms and general health status.',
+          approved: false
+        });
+      }
+      
+      // Get symptoms from analysis
+      const symptomItems: ReportItem[] = analysis.symptoms.map((symptom, index) => ({
+        id: `sym-${index}-${Date.now()}`,
+        type: 'symptom',
+        content: symptom.description,
+        approved: false
+      }));
+      
+      // Get diagnoses from analysis
+      const diagnosisItems: ReportItem[] = analysis.diagnoses.map((diag, index) => ({
+        id: `diag-${index}-${Date.now()}`,
+        type: 'diagnosis',
+        content: `${diag.name} - ${diag.confidence} confidence. ${diag.rationale}`,
+        approved: false
+      }));
+      
+      // Create context items from transcript patterns
+      const contextItems: ReportItem[] = [
+        {
+          id: `ctx-summary-${Date.now()}`,
+          type: 'context',
+          content: consultationSummary,
+          approved: false
+        }
+      ];
+      
+      if (analysis.severity && analysis.severity.level !== 'Low') {
+        contextItems.push({
+          id: `ctx-severity-${Date.now()}`,
+          type: 'context',
+          content: `This case has been assessed as ${analysis.severity.level} severity. ${analysis.severity.rationale}`,
+          approved: false
+        });
+      }
+      
+      // Create the report object
+      const newReport: Report = {
+        patientInfo: { ...patientInfo },
+        consultationDate: formattedDate,
+        consultationDuration: formatRecordingTime(recordingDuration),
+        sections: {
+          context: {
+            title: "Consultation Context",
+            items: contextItems
+          },
+          symptoms: {
+            title: "Reported Symptoms",
+            items: symptomItems
+          },
+          diagnoses: {
+            title: "Potential Diagnoses",
+            items: diagnosisItems
+          },
+          recommendations: {
+            title: "Recommendations",
+            items: recommendations
+          }
+        },
+        isApproved: false,
+        isGenerating: false
+      };
+      
+      // Update the report state
+      setReport(newReport);
+      // Switch to report tab
+      setActiveTab('report');
+    } catch (err) {
+      console.error("Error generating report:", err);
+      setError("Failed to generate report, please try again");
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+  
+  // Toggle approval status of a report item
+  const toggleReportItemApproval = (sectionKey: keyof Report['sections'], itemId: string) => {
+    if (!report) return;
+    
+    setReport((prevReport) => {
+      if (!prevReport) return null;
+      
+      const updatedSections = { ...prevReport.sections };
+      const section = updatedSections[sectionKey];
+      
+      const updatedItems = section.items.map(item => 
+        item.id === itemId ? { ...item, approved: !item.approved } : item
+      );
+      
+      updatedSections[sectionKey] = {
+        ...section,
+        items: updatedItems
+      };
+      
+      return {
+        ...prevReport,
+        sections: updatedSections
+      };
+    });
+  };
+  
+  // Edit a report item
+  const updateReportItem = (sectionKey: keyof Report['sections'], itemId: string, newContent: string) => {
+    if (!report) return;
+    
+    setReport((prevReport) => {
+      if (!prevReport) return null;
+      
+      const updatedSections = { ...prevReport.sections };
+      const section = updatedSections[sectionKey];
+      
+      const updatedItems = section.items.map(item => 
+        item.id === itemId ? { ...item, content: newContent, isEditing: false } : item
+      );
+      
+      updatedSections[sectionKey] = {
+        ...section,
+        items: updatedItems
+      };
+      
+      return {
+        ...prevReport,
+        sections: updatedSections
+      };
+    });
+  };
+  
+  // Toggle editing mode for a report item
+  const toggleItemEditing = (sectionKey: keyof Report['sections'], itemId: string) => {
+    if (!report) return;
+    
+    setReport((prevReport) => {
+      if (!prevReport) return null;
+      
+      const updatedSections = { ...prevReport.sections };
+      const section = updatedSections[sectionKey];
+      
+      const updatedItems = section.items.map(item => 
+        item.id === itemId ? { ...item, isEditing: !item.isEditing } : item
+      );
+      
+      updatedSections[sectionKey] = {
+        ...section,
+        items: updatedItems
+      };
+      
+      return {
+        ...prevReport,
+        sections: updatedSections
+      };
+    });
+  };
+  
+  // Export report as PDF
+  const exportReportAsPDF = () => {
+    alert("PDF export functionality would be implemented here.");
+    // This would typically involve:
+    // 1. Formatting the report data
+    // 2. Using a library like jsPDF to generate a PDF
+    // 3. Triggering a download of the generated PDF
+  };
+  
+  // Share report
+  const shareReport = () => {
+    alert("Share functionality would be implemented here.");
+    // This would typically involve:
+    // 1. Generate a shareable link or email content
+    // 2. Using the Web Share API or a custom sharing UI
+  };
+  
+  // Finalize the report
+  const finalizeReport = () => {
+    if (!report) return;
+    
+    // Count approved items
+    let approvedCount = 0;
+    let totalItems = 0;
+    
+    Object.values(report.sections).forEach(section => {
+      section.items.forEach(item => {
+        totalItems++;
+        if (item.approved) approvedCount++;
+      });
+    });
+    
+    // Show warning if not all items are approved
+    if (approvedCount < totalItems) {
+      if (!confirm(`Only ${approvedCount} of ${totalItems} items are approved. Are you sure you want to finalize the report?`)) {
+        return;
+      }
+    }
+    
+    // Set report as approved
+    setReport(prevReport => {
+      if (!prevReport) return null;
+      
+      return {
+        ...prevReport,
+        isApproved: true
+      };
+    });
+    
+    // Show success message
+    alert("Report has been finalized and saved.");
+    
+    // In a real implementation, you would also:
+    // 1. Save the report to the database
+    // 2. Generate a PDF automatically
+    // 3. Add it to the patient's record
+    // 4. Potentially send it to relevant parties
+  };
   
   // Add useEffect to log API_BASE_URL in the browser
   useEffect(() => {
     console.log('BROWSER CHECK - API_BASE_URL:', API_BASE_URL);
-  }, []); // Empty dependency array ensures this runs only once on mount
+  }, []);
+  
+  // Recording timer effect
+  useEffect(() => {
+    if (isRecording) {
+      // Start timer for recording duration
+      recordingTimerRef.current = window.setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+    } else {
+      // Clear timer when not recording
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+    }
+    
+    return () => {
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+    };
+  }, [isRecording]);
 
-  // -- HELPER FUNCTIONS --
+  // Update patient info handler
+  const updatePatientInfo = (field: keyof PatientInfo, value: string) => {
+    setPatientInfo(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+  
+  // Format recording time as mm:ss
+  const formatRecordingTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // Determine WebSocket URL based on the API base URL
-  // Define this BEFORE setupWebSocket
   const getWebSocketUrl = () => {
     if (!API_BASE_URL) {
-        console.error("Cannot determine WebSocket URL because API_BASE_URL is not set.");
-        return null; // Return null if base URL isn't set
+      console.error("Cannot determine WebSocket URL because API_BASE_URL is not set.");
+      return null;
     }
-    // Replace http/https with ws/wss
     const wsProtocol = API_BASE_URL.startsWith('https') ? 'wss' : 'ws';
-    // Remove protocol part and append WebSocket path
     const wsUrl = `${wsProtocol}://${API_BASE_URL.replace(/^https?:\/\//, '')}/ws/transcribe`;
-    console.log(`Calculated WebSocket URL: ${wsUrl}`); // Log the calculated WS URL
+    console.log(`Calculated WebSocket URL: ${wsUrl}`);
     return wsUrl;
   };
 
-  // Other helper functions (extractSpeakerFromText, removeSpeakerPrefix)
+  // Speaker text extraction helpers
   const extractSpeakerFromText = (text: string): string | undefined => {
-      // Simple extraction logic (improve as needed)
-      const match = text.match(/^(Speaker \d+):/);
-      return match ? match[1] : undefined;
+    const match = text.match(/^(Speaker \d+):/);
+    return match ? match[1] : undefined;
   };
 
   const removeSpeakerPrefix = (text: string): string => {
-      // Simple removal logic
-      return text.replace(/^(Speaker \d+):\s*/, '');
+    return text.replace(/^(Speaker \d+):\s*/, '');
   };
 
   // Cleanup function for media recorder and WebSocket
@@ -156,14 +587,16 @@ function ConsultationWorkspace() {
         audioContextRef.current.close();
         audioContextRef.current = null;
       }
+      
+      // Clear timer
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
     };
   }, []);
 
-  /**
-   * Sets up WebSocket connection with retry logic and fallbacks
-   * @returns WebSocket connection for transcription
-   * @throws Error if WebSocket URL cannot be determined or connection fails
-   */
+  // Setup WebSocket connection with retry logic
   const setupWebSocket = (): WebSocket => {
     // Close existing connection if there is one
     if (websocketRef.current) {
@@ -174,17 +607,16 @@ function ConsultationWorkspace() {
       }
     }
 
-    // Get the WebSocket URL using the helper function which includes checks
+    // Get the WebSocket URL using the helper function
     const wsUrl = getWebSocketUrl();
 
     if (!wsUrl) {
         const errorMsg = "Cannot setup WebSocket: API_BASE_URL is not configured.";
         console.error(errorMsg);
-        setError(errorMsg); // Update UI state if possible
-        throw new Error(errorMsg); // Throw error to prevent proceeding
+        setError(errorMsg);
+        throw new Error(errorMsg);
     }
 
-    // wsUrl is guaranteed to be a string here
     console.log(`Attempting WebSocket connection to backend at ${wsUrl}`);
 
     try {
@@ -192,7 +624,7 @@ function ConsultationWorkspace() {
       
       newWs.onopen = () => {
         console.log("WebSocket connection established");
-        setError(null); // Clear error state if this was a reconnection
+        setError(null);
       };
       
       newWs.onmessage = (event) => {
@@ -205,7 +637,7 @@ function ConsultationWorkspace() {
           
           // Parse incoming data as JSON
           const data = JSON.parse(event.data);
-          console.log("Received WebSocket message:", data); // More detailed log for debugging
+          console.log("Received WebSocket message:", data);
           
           if (data.type === "transcript") {
             // Use the received speaker number (defaulting to 0 if missing)
@@ -214,9 +646,10 @@ function ConsultationWorkspace() {
             const speakerLabel = `Speaker ${speakerNumber + 1}`;
             
             setTranscript(prev => [...prev, { 
-              id: Date.now(), // Use timestamp as a simple unique key
-              text: data.text, // Already stripped in backend
-              speaker: speakerLabel // Store the generated label
+              id: Date.now(), 
+              text: data.text,
+              speaker: speakerLabel,
+              timestamp: new Date().toISOString()
             }]);
           } else if (data.type === "analysis") {
             // Handle analysis data from backend
@@ -226,7 +659,7 @@ function ConsultationWorkspace() {
                setAnalysis({
                    symptoms: data.data.symptoms || [],
                    suggestions: data.data.suggestions || [],
-                   severity: data.data.severity || { level: "Low", rationale: "" }, // Default object if missing
+                   severity: data.data.severity || { level: "Low", rationale: "" },
                    diagnoses: data.data.diagnoses || []
                });
             } else {
@@ -236,7 +669,7 @@ function ConsultationWorkspace() {
             // Handle error messages from backend/Deepgram
             console.error("Received error message:", data.message);
             setError(`Error: ${data.message}`);
-          } else if (data.status === "ready" || data.type === "status") { // Include 'status' type
+          } else if (data.status === "ready" || data.type === "status") {
             // Handle ready status
             console.log("Transcription service status:", data.message || "Ready");
           } else if (data.event === "transcription") {
@@ -249,7 +682,8 @@ function ConsultationWorkspace() {
             setTranscript(prev => [...prev, { 
               id: Date.now(), 
               text: removeSpeakerPrefix(data.text), 
-              speaker: speaker 
+              speaker: speaker,
+              timestamp: new Date().toISOString()
             }]);
           } else if (data.text) {
             // Fallback for other text formats
@@ -261,13 +695,12 @@ function ConsultationWorkspace() {
             setTranscript(prev => [...prev, { 
               id: Date.now(), 
               text: removeSpeakerPrefix(data.text), 
-              speaker: speaker 
+              speaker: speaker,
+              timestamp: new Date().toISOString()
             }]);
           }
         } catch (error) {
           console.error("Error processing WebSocket message:", error);
-          // Optionally provide user feedback about message processing errors
-          // setError("Error processing message from server.");
         }
       };
       
@@ -278,16 +711,14 @@ function ConsultationWorkspace() {
       
       newWs.onclose = (event) => {
         console.log(`WebSocket connection closed. Code: ${event.code}, Reason: ${event.reason}, Was Clean: ${event.wasClean}`);
-        // Optionally handle reconnection logic here if needed
-        // For now, just log and potentially show an error if it wasn't a clean close
         if (!event.wasClean) {
-             setError("WebSocket connection closed unexpectedly.");
+          setError("WebSocket connection closed unexpectedly.");
         }
       };
       
       websocketRef.current = newWs;
       return newWs;
-    } catch (error: any) { // Type the error as any to fix the linter error
+    } catch (error: any) {
       console.error("Error setting up WebSocket connection:", error);
       setError(`Failed to connect: ${error.message || 'Unknown error'}`);
       throw error;
@@ -309,9 +740,6 @@ function ConsultationWorkspace() {
       const sourceNode = audioContext.createMediaStreamSource(stream);
       
       // Set up the processor for audio capture
-      // Note: ScriptProcessorNode is deprecated and shows a warning in console
-      // TODO: Replace with AudioWorkletNode in a future update for better performance
-      // For now, we use ScriptProcessorNode as it's more widely supported
       const recorderBufferSize = 4096;
       let recording = true;
       
@@ -329,55 +757,17 @@ function ConsultationWorkspace() {
             const inputData = e.inputBuffer.getChannelData(0);
             
             // Convert Float32Array (-1.0 to 1.0) to Int16Array (-32768 to 32767)
-            // This matches the 'linear16' encoding expected by the backend
             const pcmData = new Int16Array(inputData.length);
             for (let i = 0; i < inputData.length; i++) {
               pcmData[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF;
             }
             
-            // Log periodically to avoid flooding the console
-            // if (Math.random() < 0.005) { // Reduce logging frequency
-            //   console.log(`Sending audio chunk: ${pcmData.byteLength} bytes`);
-            // }
-            
             // Send the raw PCM data (Int16Array) directly as binary
-            // WebSocket API can handle TypedArrays like Int16Array
-            if (websocket.bufferedAmount < recorderBufferSize * 2) { // Basic backpressure check
-                websocket.send(pcmData.buffer); // Send the underlying ArrayBuffer
+            if (websocket.bufferedAmount < recorderBufferSize * 2) {
+                websocket.send(pcmData.buffer);
             } else {
                 console.warn("WebSocket buffer full, dropping audio chunk");
             }
-
-            // Remove the Base64 encoding logic
-            /*
-            try {
-              // Make sure WebSocket is still open
-              if (websocket.readyState !== WebSocket.OPEN) {
-                console.error("WebSocket is not open, cannot send audio data");
-                return;
-              }
-              
-              // Use a smaller chunk size to avoid "Maximum call stack size exceeded"
-              const uint8Array = new Uint8Array(pcmData.buffer);
-              const CHUNK_SIZE = 1024; // Process in smaller chunks to avoid stack overflow
-              let base64Data = '';
-              
-              for (let i = 0; i < uint8Array.length; i += CHUNK_SIZE) {
-                const chunk = uint8Array.slice(i, i + CHUNK_SIZE);
-                // Convert Uint8Array chunk to array of numbers for String.fromCharCode
-                const chunkArray = Array.from(chunk);
-                base64Data += String.fromCharCode.apply(null, chunkArray);
-              }
-              
-              // Now convert to base64
-              base64Data = btoa(base64Data);
-              
-              // Send the data
-              websocket.send(base64Data);
-            } catch (encodeErr) {
-              console.error("Error encoding audio data:", encodeErr);
-            }
-            */
           } catch (err) {
             console.error("Error processing audio chunk:", err);
           }
@@ -422,16 +812,6 @@ function ConsultationWorkspace() {
       { text: "Yes, it's been going on for about two weeks now.", speaker: "Patient" },
       { text: "Have you tried any medications to alleviate the pain?", speaker: "Doctor" },
       { text: "I've tried taking over-the-counter pain medication but it doesn't help much.", speaker: "Patient" },
-      { text: "Have you noticed any changes in your vision?", speaker: "Doctor" },
-      { text: "No, I haven't noticed any changes in my vision.", speaker: "Patient" },
-      { text: "How's your sleep? How many hours do you typically get each night?", speaker: "Doctor" },
-      { text: "I usually sleep about 7 hours per night.", speaker: "Patient" },
-      { text: "Have you been under any stress lately?", speaker: "Doctor" },
-      { text: "I've been under a lot of stress at work lately.", speaker: "Patient" },
-      { text: "What about caffeine intake? How much coffee or tea do you drink daily?", speaker: "Doctor" },
-      { text: "Yes, I drink about 2-3 cups of coffee each day.", speaker: "Patient" },
-      { text: "Is there any family history of migraines or similar headaches?", speaker: "Doctor" },
-      { text: "No family history of migraines that I'm aware of.", speaker: "Patient" }
     ];
     
     // Add mock phrases at intervals to simulate real-time transcription
@@ -441,13 +821,15 @@ function ConsultationWorkspace() {
         setTranscript(prev => [...prev, { 
           id: Date.now(), 
           text: mockConversation[index].text,
-          speaker: mockConversation[index].speaker
+          speaker: mockConversation[index].speaker,
+          timestamp: new Date().toISOString()
         }]);
         index++;
       } else {
         clearInterval(interval);
         setIsRecording(false);
         setIsProcessing(false);
+        setRecordingDuration(0);
       }
     }, 2500);
     
@@ -460,7 +842,8 @@ function ConsultationWorkspace() {
   };
 
   const handleRecord = async () => {
-    setError(null); // Clear previous errors
+    setError(null);
+    setRecordingDuration(0);
     
     // Generate a unique consultation ID
     const consultationId = `consultation-${Date.now()}`;
@@ -471,15 +854,14 @@ function ConsultationWorkspace() {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
         // 2. Setup WebSocket Connection
-        const websocket = setupWebSocket(); // Call setupWebSocket first
-        websocketRef.current = websocket; // Store the created websocket in the ref
+        const websocket = setupWebSocket();
+        websocketRef.current = websocket;
 
-        // 3. Wait for WebSocket connection to be established before setting up audio
-        const MAX_RETRIES = 30; // Increased from 10 to 30
-        const RETRY_DELAY_MS = 1000; // 1 second delay
+        // 3. Wait for WebSocket connection to be established
+        const MAX_RETRIES = 30;
+        const RETRY_DELAY_MS = 1000;
 
         let retries = MAX_RETRIES;
-        // Use the 'websocket' variable returned by setupWebSocket()
         while (websocket.readyState !== WebSocket.OPEN && retries > 0) {
           console.log(`Waiting for WebSocket connection, state: ${websocket.readyState}, retries left: ${retries}`);
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
@@ -490,23 +872,22 @@ function ConsultationWorkspace() {
         if (websocket.readyState !== WebSocket.OPEN) {
           console.warn("Failed to establish WebSocket connection after retries. Using mock transcription instead.");
           setError("Could not connect to transcription service. Using demo mode.");
-          // Optionally stop the stream if we failed to connect
           stream.getTracks().forEach(track => track.stop());
-          // Start simulation if connection fails
           simulateTranscription();
-          return; // Exit the function
+          setIsRecording(true);
+          return;
         }
 
-        // 5. Setup Audio Processing (only if WebSocket connected)
+        // 5. Setup Audio Processing
         const audioProcessing = setupAudioProcessing(stream, websocket);
         audioProcessingRef.current = audioProcessing;
         
-        // Also setup MediaRecorder for backup/local recording if needed
+        // Setup MediaRecorder for backup
         const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
           ? 'audio/webm;codecs=opus'
           : MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
           ? 'audio/ogg;codecs=opus'
-          : 'audio/webm'; // Fallback
+          : 'audio/webm';
           
         const mediaRecorder = new MediaRecorder(stream, { mimeType });
         mediaRecorderRef.current = mediaRecorder;
@@ -514,7 +895,6 @@ function ConsultationWorkspace() {
         // Reset audio chunks
         audioChunksRef.current = [];
         
-        // Handle data available for local backup
         mediaRecorder.ondataavailable = (event) => {
           if (event.data.size > 0) {
             audioChunksRef.current.push(event.data);
@@ -548,17 +928,13 @@ function ConsultationWorkspace() {
         mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
       }
       
-      // Send end signal to WebSocket
+      // Close WebSocket connection
       if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
-        // Send a specific message or close the connection gracefully
-        // Option 1: Send a special binary message (e.g., empty buffer)
-        // websocketRef.current.send(new ArrayBuffer(0)); 
-        // Option 2: Close the WebSocket from the client side
         console.log("Closing WebSocket from client after stopping recording.");
-        websocketRef.current.close(1000, "Client stopped recording"); // 1000 is normal closure
+        websocketRef.current.close(1000, "Client stopped recording");
       }
       
-      // Call the clean stop function from audio processing
+      // Cleanup audio processing
       if (processorNodeRef.current) {
         processorNodeRef.current.disconnect();
         processorNodeRef.current = null;
@@ -568,372 +944,696 @@ function ConsultationWorkspace() {
         audioContextRef.current.close().catch(console.error);
         audioContextRef.current = null;
       }
-    }
-  };
-
-  // Handle Pause remains the same as before or can call handleStop for now
-  const handlePause = () => {
-    handleStop(); // For now, just stop the recording
-  };
-
-  // File upload handler remains the same for now
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      const file = event.target.files[0];
-      console.log('File selected:', file.name);
-      // TODO: Implement file upload logic (potentially use the same /direct endpoint?)
+      
+      // Reset recording duration timer
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      
+      // Switch to analysis tab after stopping
+      setActiveTab('analysis');
+      
+      // Set a brief processing state to indicate analysis completion
+      setIsProcessing(true);
+      setTimeout(() => {
+        setIsProcessing(false);
+        // Show a message indicating that a report can be generated
+        console.log("Analysis complete. Ready to generate report!");
+      }, 1500);
     }
   };
 
   return (
-    <div className="container mx-auto p-6 flex flex-col min-h-[calc(100vh-4rem)] gap-6 bg-gray-50 overflow-y-auto pb-24">
-      {/* Top Row: Patient Info, Document Upload & Controls */}
-      <div className="flex flex-col md:flex-row flex-wrap gap-4">
-        {/* Patient Info Section */}
-        <Card className="w-full md:w-auto flex-shrink-0 border-none shadow-sm">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-lg text-gray-800">Patient Information</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-2 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-             <Label htmlFor="patientName" className="whitespace-nowrap font-medium text-gray-700">Name:</Label>
-             <Input
-               id="patientName"
-               type="text"
-               placeholder="Enter patient name..."
-               value={patientName}
-               onChange={(e) => setPatientName(e.target.value)}
-               className="w-full sm:w-72 border-gray-200 focus:border-blue-500"
-             />
-            {/* TODO: Add more patient fields (DOB, ID, etc.) */}
-          </CardContent>
-        </Card>
-
-        {/* Document Upload Card - Moved to top row */}
-        <Card className="w-full md:w-auto flex-shrink-0 border-none shadow-sm">
-          <CardHeader className="p-4 pb-2">
-            <CardTitle className="text-gray-800 flex items-center gap-2">
-              <UploadCloud className="h-4 w-4 text-gray-600" />
-              Document Upload
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-2 flex items-center">
-            <Label
-              htmlFor="documentUpload"
-              className="flex flex-col items-center justify-center w-full h-12 border-2 border-dashed border-gray-200 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors px-4"
-            >
-              <div className="flex items-center">
-                <UploadCloud className="w-5 h-5 text-gray-400 mr-2" />
-                <span className="text-sm font-medium text-gray-700">Click to upload files</span>
-              </div>
-            </Label>
-            <Input id="documentUpload" type="file" className="hidden" onChange={handleFileChange} multiple />
-          </CardContent>
-        </Card>
-
-        {/* Recording Controls */}
-        <Card className="w-full md:w-auto flex-grow md:flex-grow-0 md:ml-auto border-none shadow-sm">
-           <CardContent className="p-4 flex flex-wrap justify-center items-center gap-3">
-            {!isRecording && !isProcessing && (
-                <Button onClick={handleRecord} variant="default" size="lg" className="flex-grow md:flex-grow-0 bg-blue-600 hover:bg-blue-700 text-white">
-                   <Mic className="mr-2 h-5 w-5" /> Start Consultation
-                </Button>
-            )}
+    <div className="flex flex-col min-h-screen bg-background">
+      {/* Header with Recording Controls */}
+      <header className="sticky top-0 z-10 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-14 items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Stethoscope className="h-5 w-5 text-primary" />
+            <h1 className="font-medium">Consultation Workspace</h1>
             {isRecording && (
-                <>
-                <Button onClick={handleStop} variant="outline" size="lg" className="bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300">
-                    <Square className="mr-2 h-5 w-5" /> Stop & Process
-                </Button>
-                </>
+              <Badge variant="outline" className="ml-2 bg-red-50 text-red-700 border-red-200 animate-pulse">
+                <span className="mr-1 h-2 w-2 rounded-full bg-red-500"></span>
+                Recording {formatRecordingTime(recordingDuration)}
+              </Badge>
             )}
-             {isProcessing && (
-                 <Button disabled size="lg" className="bg-gray-100 text-gray-500">
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Processing Audio...
-                 </Button>
-            )}
-           </CardContent>
-        </Card>
-      </div>
-
-      {/* Main Content Area */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Severity Badge - Always at top */}
-        {analysis.severity && (
-          <div className="lg:col-span-12 flex">
-            <SeverityBadge severity={analysis.severity} />
-          </div>
-        )}
-        
-        {/* Analysis Cards - Full width on mobile, 8/12 on desktop */}
-        <div className="lg:col-span-8 grid grid-cols-1 gap-5">
-          {/* Top Row: Two-column layout on tablets and up */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            {/* Suggested Questions Card */}
-            <Card className="flex flex-col border-none shadow-sm bg-gradient-to-br from-blue-50 to-white overflow-hidden min-h-[200px]">
-              <CardHeader className="p-3 sm:p-4 pb-2 border-b border-blue-100 flex-shrink-0">
-                <CardTitle className="text-blue-800 flex items-center gap-2 text-base sm:text-lg">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600 flex-shrink-0">
-                    <circle cx="12" cy="12" r="10"/>
-                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                    <path d="M12 17h.01"/>
-                  </svg>
-                  <span className="truncate">Suggested Questions</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 sm:p-4 pt-2 overflow-auto flex-grow">
-                {analysis.suggestions.length > 0 ? (
-                  <ul className="space-y-2">
-                  {analysis.suggestions.map((suggestion, index) => (
-                      <li key={index} className="flex items-start gap-2 text-gray-800">
-                        <span className="flex-shrink-0 h-5 w-5 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center text-xs font-medium">
-                          {index + 1}
-                        </span>
-                        <span className="text-sm">{suggestion}</span>
-                      </li>
-                  ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-gray-500 italic flex items-center justify-center h-16">
-                    {isRecording ? "Analyzing conversation..." : "No suggestions available yet."}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Symptoms Card */}
-            <Card className="flex flex-col border-none shadow-sm bg-gradient-to-br from-red-50 to-white overflow-hidden min-h-[200px]">
-              <CardHeader className="p-3 sm:p-4 pb-2 border-b border-red-100 flex-shrink-0">
-                <CardTitle className="text-red-800 flex items-center gap-2 text-base sm:text-lg">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-red-600 flex-shrink-0">
-                    <path d="M8 19h8a4 4 0 0 0 3.8-2.8 4 4 0 0 0-1.6-4.5c1-1.1 1-2.7 0-3.8-.7-.8-1.7-1.1-2.7-1-1-.7-2.4-.7-3.4 0-.3-.2-.7-.2-1 0-1-.7-2.4-.7-3.4 0-1-.1-2 .2-2.7 1-1 1.1-1 2.7 0 3.8a4 4 0 0 0-1.6 4.5A4 4 0 0 0 8 19Z"/>
-                    <path d="M12 3v4"/>
-                  </svg>
-                  <span className="truncate">Detected Symptoms</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 sm:p-4 pt-2 overflow-auto bg-white flex-grow">
-                {analysis.symptoms.length > 0 ? (
-                  <ul className="space-y-1.5">
-                    {analysis.symptoms.map((symptom, index) => (
-                      <li key={index} className="flex items-center gap-2 text-gray-800">
-                        <span className={`h-1.5 w-1.5 rounded-full ${symptom.is_primary ? 'bg-red-500' : 'bg-gray-400'}`}></span>
-                        <span className={`text-sm ${symptom.is_primary ? 'font-medium' : ''}`}>{symptom.description}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-gray-500 italic flex items-center justify-center h-16">
-                    {isRecording ? "Analyzing symptoms..." : "No symptoms detected yet."}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
           </div>
           
-          {/* Possible Diagnoses Card */}
-          <Card className="flex flex-col border-none shadow-sm bg-gradient-to-br from-purple-50 to-white overflow-hidden min-h-[200px] mb-6">
-            <CardHeader className="p-3 sm:p-4 pb-2 border-b border-purple-100 flex-shrink-0">
-              <CardTitle className="text-purple-800 flex items-center gap-2 text-base sm:text-lg">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-600 flex-shrink-0">
-                  <path d="M21 2H3v4h18V2z"/>
-                  <path d="M21 10H3v4h18v-4z"/>
-                  <path d="M21 18H3v4h18v-4z"/>
-                  <path d="M3 2v20"/>
-                  <path d="M21 2v20"/>
-                </svg>
-                <span className="truncate">Possible Diagnoses</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 sm:p-4 pt-2 overflow-auto flex-grow">
-              {analysis.diagnoses && analysis.diagnoses.length > 0 ? (
-                <ul className="space-y-3">
-                  {analysis.diagnoses.map((diagnosis, index) => {
-                    // Determine color based on confidence
-                    let confidenceColor = '';
-                    switch (diagnosis.confidence.toLowerCase()) {
-                      case 'high':
-                        confidenceColor = 'bg-purple-100 text-purple-800';
-                        break;
-                      case 'medium':
-                        confidenceColor = 'bg-blue-100 text-blue-800';
-                        break;
-                      case 'low':
-                        confidenceColor = 'bg-gray-100 text-gray-800';
-                        break;
-                      default:
-                        confidenceColor = 'bg-gray-100 text-gray-800';
-                    }
-                    
-                    return (
-                      <li key={index} className="p-2 bg-white rounded-md border border-gray-100">
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <div className="flex items-center gap-2">
-                            <span className="flex-shrink-0 h-6 w-6 rounded-full bg-purple-100 text-purple-800 flex items-center justify-center text-xs font-medium">
-                              {index + 1}
-                            </span>
-                            <span className="text-sm font-medium text-gray-800">{diagnosis.name}</span>
-                          </div>
-                          <span className={`text-xs px-2 py-1 rounded-full ${confidenceColor}`}>
-                            {diagnosis.confidence}
-                          </span>
-                        </div>
-                        {diagnosis.rationale && (
-                            <p className="text-xs text-gray-600 pl-8">{diagnosis.rationale}</p>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <p className="text-sm text-gray-500 italic flex items-center justify-center h-16">
-                  {isRecording ? "Analyzing for potential diagnoses..." : "No diagnoses available yet."}
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Transcript - Only visible on desktop */}
-        <Card className="hidden lg:flex lg:col-span-4 flex-col border-none shadow-sm overflow-hidden max-h-[calc(100vh-18rem)]">
-          <CardHeader className="bg-white p-4 pb-2 flex flex-row justify-between items-center border-b">
-            <div>
-              <CardTitle className="text-gray-800 text-sm">Live Transcription</CardTitle>
-              <CardDescription className="text-gray-500 text-xs">
-                  {isRecording ? "Recording in progress..." : "Start consultation to begin recording."}
-              </CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="bg-white flex-1 p-4 overflow-auto">
-            {/* Display Error Message */}
-            {error && <p className="mb-4 text-xs text-red-600">Error: {error}</p>}
-
-            {/* Display Transcript Lines */}
-            {transcript.map((line) => {
-              // Determine speaker number from label for consistent coloring
-              let speakerIdForColor = 0;
-              if (line.speaker) {
-                  const match = line.speaker.match(/\d+/);
-                  if (match) {
-                      speakerIdForColor = parseInt(match[0], 10) - 1; // Get 0, 1, 2...
-                  }
-              }
-              // Assign color based on speaker number (e.g., even/odd)
-              const colorClass = speakerIdForColor % 2 === 0 
-                  ? 'text-blue-700' 
-                  : 'text-emerald-700';
-                  
-              return (
-                  <p key={line.id} className="mb-2 text-xs leading-relaxed text-gray-800">
-                  {line.speaker ? (
-                      <>
-                      <span className={`font-semibold ${colorClass}`}>
-                          {line.speaker}:
-                      </span>{' '}
-                      {line.text}
-                      </>
-                  ) : (
-                      line.text // Should not happen if backend always sends speaker
-                  )}
-                  </p>
-              );
-            })}
-
-            {/* Display Loading/Listening Indicators */} 
-            {isRecording && transcript.length === 0 && !error && (
-              <p className="text-blue-600 italic mt-4 text-xs">Listening...</p>
+          <div className="flex items-center gap-2">
+            {!isRecording && !isProcessing && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      onClick={handleRecord} 
+                      size="sm" 
+                      className="bg-primary hover:bg-primary/90"
+                    >
+                      <Mic className="mr-2 h-4 w-4" /> Start Recording
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Start recording the consultation</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
+            
+            {isRecording && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      onClick={handleStop} 
+                      size="sm" 
+                      variant="destructive"
+                    >
+                      <Square className="mr-2 h-4 w-4" /> End Recording
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Stop recording and analyze data</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            
             {isProcessing && (
-              <p className="text-gray-500 italic mt-4 flex items-center text-xs">
-                  <Loader2 className="mr-2 h-3 w-3 animate-spin" /> Transcribing audio...
-              </p>
+              <Button disabled size="sm">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing...
+              </Button>
             )}
-            {!isRecording && !isProcessing && transcript.length === 0 && !error && (
-              <p className="text-gray-500 italic mt-4 text-xs">Transcription will appear here.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Mobile Expand/Collapse Toggle for Transcript */}
-        <div className="lg:hidden fixed bottom-6 right-6 z-10 shadow-lg rounded-full">
-          <Button 
-            variant="default" 
-            className="rounded-full w-14 h-14 flex items-center justify-center bg-blue-600 text-white shadow-md"
-            onClick={() => {
-              const transcriptDialog = document.getElementById('mobile-transcript-dialog');
-              if (transcriptDialog) {
-                (transcriptDialog as HTMLDialogElement).showModal();
-              }
-            }}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-            </svg>
-          </Button>
-
-          {/* Mobile Transcript Dialog */}
-          <dialog id="mobile-transcript-dialog" className="w-full max-w-full h-full max-h-full p-0 m-0 rounded-lg backdrop:bg-black backdrop:bg-opacity-50">
-            <div className="flex flex-col h-full bg-white">
-              <div className="p-4 border-b flex justify-between items-center">
-                <h3 className="font-medium">Live Transcript</h3>
-                <button 
-                  onClick={() => {
-                    const transcriptDialog = document.getElementById('mobile-transcript-dialog');
-                    if (transcriptDialog) {
-                      (transcriptDialog as HTMLDialogElement).close();
-                    }
-                  }}
-                  className="p-1"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M18 6 6 18"></path>
-                    <path d="m6 6 12 12"></path>
-                  </svg>
-                </button>
-              </div>
-              <div className="flex-1 p-4 overflow-auto">
-                {transcript.map((line) => {
-                  let speakerIdForColor = 0;
-                  if (line.speaker) {
-                    const match = line.speaker.match(/\d+/);
-                    if (match) {
-                      speakerIdForColor = parseInt(match[0], 10) - 1;
-                    }
-                  }
-                  const colorClass = speakerIdForColor % 2 === 0 
-                    ? 'text-blue-700' 
-                    : 'text-emerald-700';
-                    
-                  return (
-                    <p key={line.id} className="mb-2 text-sm leading-relaxed text-gray-800">
-                      {line.speaker ? (
-                        <>
-                          <span className={`font-semibold ${colorClass}`}>
-                            {line.speaker}:
-                          </span>{' '}
-                          {line.text}
-                        </>
-                      ) : (
-                        line.text
-                      )}
-                    </p>
-                  );
-                })}
-                {transcript.length === 0 && (
-                  <p className="text-sm text-gray-500 italic text-center mt-8">
-                    {isRecording ? "Listening..." : "No transcript available yet."}
-                  </p>
-                )}
-              </div>
-            </div>
-          </dialog>
+          </div>
         </div>
-      </div>
+      </header>
+      
+      <main className="flex-1 container py-6">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+          {/* Left sidebar - Patient Info */}
+          <div className="md:col-span-3 space-y-4">
+            {/* Patient Information Card */}
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-medium flex items-center gap-2">
+                  <Avatar className="h-5 w-5">
+                    <AvatarFallback className="bg-primary/10 text-primary text-xs">P</AvatarFallback>
+                  </Avatar>
+                  Patient Details
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="space-y-1.5">
+                  <Label htmlFor="patientName">Name</Label>
+                  <Input
+                    id="patientName"
+                    value={patientInfo.name}
+                    onChange={(e) => updatePatientInfo('name', e.target.value)}
+                    placeholder="Patient name"
+                    className="h-8"
+                  />
+                </div>
+                
+                <div className="space-y-1.5">
+                  <Label htmlFor="patientId">Patient ID</Label>
+                  <Input
+                    id="patientId"
+                    value={patientInfo.id || ''}
+                    onChange={(e) => updatePatientInfo('id', e.target.value)}
+                    placeholder="Optional ID"
+                    className="h-8"
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="patientAge">Age</Label>
+                    <Input
+                      id="patientAge"
+                      value={patientInfo.age || ''}
+                      onChange={(e) => updatePatientInfo('age', e.target.value)}
+                      placeholder="Age"
+                      className="h-8"
+                    />
+                  </div>
+                  
+                  <div className="space-y-1.5">
+                    <Label htmlFor="patientGender">Gender</Label>
+                    <Select 
+                      value={patientInfo.gender || ''} 
+                      onValueChange={(value: string) => updatePatientInfo('gender', value)}
+                    >
+                      <SelectTrigger id="patientGender" className="h-8">
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            {/* Display errors if any */}
+            {error && (
+              <Card>
+                <CardContent className="p-3">
+                  <div className="flex items-start gap-2 text-destructive rounded-md bg-destructive/10 p-2 text-xs">
+                    <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <p>{error}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+          
+          {/* Main content area - Tabs & Analysis */}
+          <div className="md:col-span-9">
+            {/* Severity Alert - Only shown if detected */}
+            {analysis.severity && analysis.severity.level.toLowerCase() !== 'low' && (
+              <div className="mb-4">
+                <SeverityBadge severity={analysis.severity} />
+              </div>
+            )}
+            
+            <Tabs defaultValue="live" value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <div className="flex items-center justify-between mb-4">
+                <TabsList>
+                  <TabsTrigger value="live" className="flex items-center gap-1">
+                    <Activity className="h-3.5 w-3.5" />
+                    <span>Live Transcript</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="analysis" className="flex items-center gap-1">
+                    <BarChart3 className="h-3.5 w-3.5" />
+                    <span>Analysis</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="report" className="flex items-center gap-1">
+                    <FileText className="h-3.5 w-3.5" />
+                    <span>Report</span>
+                  </TabsTrigger>
+                </TabsList>
+                
+                {/* Action buttons */}
+                <div className="flex items-center gap-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                          <Download className="h-4 w-4" />
+                          <span className="sr-only">Download</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Download consultation data</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                          <Share2 className="h-4 w-4" />
+                          <span className="sr-only">Share</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Share consultation</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </div>
+              
+              {/* Transcript Tab */}
+              <TabsContent value="live" className="space-y-4 animate-in fade-in-50">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Live Transcription</CardTitle>
+                    <CardDescription>
+                      {isRecording 
+                        ? "Recording in progress... Transcription will appear below."
+                        : transcript.length > 0 
+                          ? "Transcription of the consultation."
+                          : "Start recording to begin consultation."}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[calc(80vh-250px)] pr-4">
+                      {transcript.length > 0 ? (
+                        <div className="space-y-4">
+                          {transcript.map((line) => {
+                            // Determine speaker for styling
+                            let speakerIdForColor = 0;
+                            if (line.speaker) {
+                                const match = line.speaker.match(/\d+/);
+                                if (match) {
+                                    speakerIdForColor = parseInt(match[0], 10) - 1;
+                                }
+                            }
+                            
+                            // Color based on speaker role
+                            const isDoctor = speakerIdForColor % 2 === 0 || line.speaker === 'Doctor';
+                            const speakerColor = isDoctor ? 'bg-primary/10 text-primary' : 'bg-secondary/10 text-secondary-foreground';
+                            const avatarColor = isDoctor ? 'bg-primary/20 text-primary' : 'bg-secondary/20 text-secondary-foreground';
+                            const speakerLetter = isDoctor ? 'D' : 'P';
+                            
+                            return (
+                              <div key={line.id} className="flex items-start gap-3 group">
+                                <Avatar className="h-8 w-8 mt-0.5">
+                                  <AvatarFallback className={`text-xs ${avatarColor}`}>
+                                    {speakerLetter}
+                                  </AvatarFallback>
+                                </Avatar>
+                                
+                                <div className="space-y-1 flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-sm font-medium px-2 py-0.5 rounded ${speakerColor}`}>
+                                      {line.speaker || 'Speaker'}
+                                    </span>
+                                    {line.timestamp && (
+                                      <span className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                                        {new Date(line.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm">{line.text}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-[300px] text-center p-8">
+                          <MessageSquare className="h-12 w-12 text-muted-foreground/30 mb-4" />
+                          <h3 className="text-xl font-medium text-muted-foreground mb-1">No transcription yet</h3>
+                          <p className="text-sm text-muted-foreground/70 max-w-md">
+                            Click the "Start Recording" button to begin capturing 
+                            the consultation. The transcription will appear here in real-time.
+                          </p>
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              {/* Analysis Tab */}
+              <TabsContent value="analysis" className="space-y-6 animate-in fade-in-50">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Symptoms Card */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Activity className="h-4 w-4 text-destructive" />
+                        Detected Symptoms
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ScrollArea className="h-[calc(40vh-100px)] pr-4">
+                        {analysis.symptoms.length > 0 ? (
+                          <div className="space-y-2 pt-1">
+                            {analysis.symptoms.map((symptom, index) => (
+                              <div key={index} className="flex items-start gap-2.5 group">
+                                <span className="flex-shrink-0 h-5 w-5 rounded-full bg-red-50 border border-red-200 flex items-center justify-center mt-0.5">
+                                  <span 
+                                    className={`h-2.5 w-2.5 rounded-full ${
+                                      symptom.is_primary ? 'bg-destructive' : 'bg-orange-300'
+                                    }`}>
+                                  </span>
+                                </span>
+                                <div className="flex-1">
+                                  <div 
+                                    className="text-sm"
+                                    contentEditable={!isRecording && !isProcessing}
+                                    suppressContentEditableWarning={true}
+                                    onBlur={(e) => {
+                                      const newSymptoms = [...analysis.symptoms];
+                                      newSymptoms[index] = {
+                                        ...symptom,
+                                        description: e.target.innerText
+                                      };
+                                      setAnalysis({...analysis, symptoms: newSymptoms});
+                                    }}
+                                  >
+                                    {symptom.description}
+                                  </div>
+                                  <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Badge 
+                                      variant="outline" 
+                                      className={`text-xs px-1.5 ${symptom.is_primary ? 'border-destructive/50 text-destructive' : 'border-orange-200 text-orange-700'}`}
+                                    >
+                                      {symptom.is_primary ? 'Primary' : 'Secondary'}
+                                    </Badge>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center h-[200px] text-center py-6">
+                            <p className="text-sm text-muted-foreground">
+                              {isRecording 
+                                ? "Analyzing for symptoms..." 
+                                : "No symptoms detected yet."}
+                            </p>
+                          </div>
+                        )}
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
+                  
+                  {/* Questions Card */}
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <HelpCircle className="h-4 w-4 text-primary" />
+                        Suggested Questions
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <ScrollArea className="h-[calc(40vh-100px)] pr-4">
+                        {analysis.suggestions.length > 0 ? (
+                          <ul className="space-y-2 pt-1">
+                            {analysis.suggestions.map((suggestion, index) => (
+                              <li key={index} className="flex items-start gap-2.5">
+                                <span className="flex-shrink-0 h-5 w-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium mt-0.5">
+                                  {index + 1}
+                                </span>
+                                <p className="text-sm flex-1">{suggestion}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center h-[200px] text-center py-6">
+                            <p className="text-sm text-muted-foreground">
+                              {isRecording 
+                                ? "Generating question suggestions..." 
+                                : "No questions suggested yet."}
+                            </p>
+                          </div>
+                        )}
+                      </ScrollArea>
+                    </CardContent>
+                  </Card>
+                </div>
+                
+                {/* Diagnoses Card */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Layers className="h-4 w-4 text-purple-600" />
+                      Possible Diagnoses
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[calc(40vh-100px)] pr-4">
+                      {analysis.diagnoses && analysis.diagnoses.length > 0 ? (
+                        <div className="space-y-3 pt-1">
+                          {analysis.diagnoses.map((diagnosis, index) => {
+                            // Get confidence styling
+                            let confidenceBadge = '';
+                            switch (diagnosis.confidence.toLowerCase()) {
+                              case 'high':
+                                confidenceBadge = 'bg-purple-50 text-purple-700 border-purple-200';
+                                break;
+                              case 'medium':
+                                confidenceBadge = 'bg-blue-50 text-blue-700 border-blue-200';
+                                break;
+                              case 'low':
+                                confidenceBadge = 'bg-gray-50 text-gray-700 border-gray-200';
+                                break;
+                              default:
+                                confidenceBadge = 'bg-gray-50 text-gray-700 border-gray-200';
+                            }
+                            
+                            return (
+                              <div key={index} className="p-3 rounded-lg border bg-card/50">
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="flex-shrink-0 h-6 w-6 rounded-full bg-purple-50 text-purple-700 flex items-center justify-center text-xs font-medium">
+                                      {index + 1}
+                                    </span>
+                                    <span 
+                                      className="text-sm font-medium"
+                                      contentEditable={!isRecording && !isProcessing}
+                                      suppressContentEditableWarning={true}
+                                      onBlur={(e) => {
+                                        const newDiagnoses = [...analysis.diagnoses];
+                                        newDiagnoses[index] = {
+                                          ...diagnosis,
+                                          name: e.target.innerText
+                                        };
+                                        setAnalysis({...analysis, diagnoses: newDiagnoses});
+                                      }}
+                                    >
+                                      {diagnosis.name}
+                                    </span>
+                                  </div>
+                                  <Badge variant="outline" className={`text-xs ${confidenceBadge}`}>
+                                    {diagnosis.confidence} confidence
+                                  </Badge>
+                                </div>
+                                {diagnosis.rationale && (
+                                  <p 
+                                    className="text-xs text-muted-foreground pl-8"
+                                    contentEditable={!isRecording && !isProcessing}
+                                    suppressContentEditableWarning={true}
+                                    onBlur={(e) => {
+                                      const newDiagnoses = [...analysis.diagnoses];
+                                      newDiagnoses[index] = {
+                                        ...diagnosis,
+                                        rationale: e.target.innerText
+                                      };
+                                      setAnalysis({...analysis, diagnoses: newDiagnoses});
+                                    }}
+                                  >
+                                    {diagnosis.rationale}
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center h-[200px] text-center py-6">
+                          <p className="text-sm text-muted-foreground">
+                            {isRecording 
+                              ? "Analyzing for potential diagnoses..." 
+                              : "No diagnoses available yet."}
+                          </p>
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              {/* Report Tab */}
+              <TabsContent value="report" className="animate-in fade-in-50">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Consultation Report</CardTitle>
+                    <CardDescription>
+                      Generate a structured report from this consultation
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {!report ? (
+                      <div className="py-8 flex flex-col items-center justify-center space-y-4">
+                        <div className="rounded-full p-3 bg-primary/10">
+                          <Wand2 className="h-8 w-8 text-primary" />
+                        </div>
+                        <h3 className="text-xl font-medium">Generate Report</h3>
+                        <p className="text-sm text-muted-foreground text-center max-w-md">
+                          Create a structured medical consultation report based on the transcript and analysis.
+                          The report will include key findings, diagnoses, and follow-up recommendations.
+                        </p>
+                        <Button 
+                          onClick={generateReport} 
+                          disabled={isRecording || isGeneratingReport || transcript.length === 0}
+                          className="mt-2"
+                        >
+                          {isGeneratingReport ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...
+                            </>
+                          ) : (
+                            <>
+                              <FileText className="mr-2 h-4 w-4" /> Generate Report
+                            </>
+                          )}
+                        </Button>
+                        {(isRecording || transcript.length === 0) && (
+                          <p className="text-xs text-muted-foreground">
+                            {isRecording 
+                              ? "Please stop recording before generating a report" 
+                              : "Record a consultation first to generate a report"}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        {/* Report Header with Patient Info */}
+                        <div className="p-4 rounded-lg border">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 justify-between mb-3">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h3 className="text-lg font-medium">
+                                  {report.patientInfo.name ? report.patientInfo.name : "Unnamed Patient"}
+                                </h3>
+                                {report.isApproved && (
+                                  <Badge className="bg-green-100 text-green-800 border-green-200 hover:bg-green-200">
+                                    Finalized
+                                  </Badge>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">
+                                {report.patientInfo.id && (
+                                  <span>ID: {report.patientInfo.id}</span>
+                                )}
+                                {report.patientInfo.age && (
+                                  <span>Age: {report.patientInfo.age}</span>
+                                )}
+                                {report.patientInfo.gender && (
+                                  <span>Gender: {report.patientInfo.gender}</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="space-y-1 text-sm">
+                              <div>
+                                <span className="text-muted-foreground">Date: </span>
+                                <span>{report.consultationDate}</span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Duration: </span>
+                                <span>{report.consultationDuration}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Report Sections */}
+                        <ScrollArea className="h-[calc(80vh-350px)]">
+                          <div className="space-y-6 pr-4">
+                            {/* Context Section */}
+                            <ReportSectionCard
+                              section={report.sections.context}
+                              sectionKey="context"
+                              toggleApproval={toggleReportItemApproval}
+                              updateItem={updateReportItem}
+                              toggleEditing={toggleItemEditing}
+                            />
+                            
+                            {/* Symptoms Section */}
+                            <ReportSectionCard
+                              section={report.sections.symptoms}
+                              sectionKey="symptoms"
+                              toggleApproval={toggleReportItemApproval}
+                              updateItem={updateReportItem}
+                              toggleEditing={toggleItemEditing}
+                            />
+                            
+                            {/* Diagnoses Section */}
+                            <ReportSectionCard
+                              section={report.sections.diagnoses}
+                              sectionKey="diagnoses"
+                              toggleApproval={toggleReportItemApproval}
+                              updateItem={updateReportItem}
+                              toggleEditing={toggleItemEditing}
+                            />
+                            
+                            {/* Recommendations Section */}
+                            <ReportSectionCard
+                              section={report.sections.recommendations}
+                              sectionKey="recommendations"
+                              toggleApproval={toggleReportItemApproval}
+                              updateItem={updateReportItem}
+                              toggleEditing={toggleItemEditing}
+                            />
+                          </div>
+                        </ScrollArea>
+                        
+                        {/* Action Buttons */}
+                        <div className="flex items-center justify-between pt-4 mt-2 border-t">
+                          {!report.isApproved ? (
+                            <>
+                              <Button 
+                                variant="ghost" 
+                                onClick={() => setReport(null)}
+                                size="sm"
+                              >
+                                <X className="mr-2 h-4 w-4" /> Discard
+                              </Button>
+                              
+                              <div className="flex gap-3">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={shareReport}
+                                >
+                                  <Share2 className="mr-2 h-4 w-4" /> Share
+                                </Button>
+                                
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={exportReportAsPDF}
+                                >
+                                  <Download className="mr-2 h-4 w-4" /> Export PDF
+                                </Button>
+                                
+                                <Button
+                                  size="sm"
+                                  onClick={finalizeReport}
+                                >
+                                  <CheckCircle className="mr-2 h-4 w-4" /> Finalize Report
+                                </Button>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-sm text-muted-foreground flex items-center">
+                                <CheckCircle className="h-4 w-4 mr-2 text-green-600" />
+                                Report finalized successfully
+                              </p>
+                              
+                              <div className="flex gap-3">
+                                <Button
+                                  size="sm"
+                                  onClick={shareReport}
+                                >
+                                  <Share2 className="mr-2 h-4 w-4" /> Share
+                                </Button>
+                                
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={exportReportAsPDF}
+                                >
+                                  <Download className="mr-2 h-4 w-4" /> Download PDF
+                                </Button>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
 
 // --- Helper Component for Severity Badge ---
-// Update props to accept the Severity object
 interface SeverityBadgeProps {
   severity: Severity;
 }
@@ -944,45 +1644,193 @@ const SeverityBadge: React.FC<SeverityBadgeProps> = ({ severity }) => {
   const rationale = severity?.rationale || '';
   const severityLower = level.toLowerCase(); 
 
-  let colorClasses = "bg-gray-100 text-gray-800 border-gray-200"; // Default
-  let bgGradient = "from-gray-50 to-gray-100";
-  let IconComponent = Info; // Default icon
-
+  let iconVariant: React.ReactNode;
+  let badgeVariant: "default" | "destructive" | "outline" | "secondary" = "default";
+  
   switch (severityLower) {
     case 'low':
-      colorClasses = "bg-green-100 text-green-800 border-green-200";
-      bgGradient = "from-green-50 to-green-100";
-      IconComponent = Info;
+      badgeVariant = "outline";
+      iconVariant = (
+        <div className="h-6 w-6 rounded-full bg-green-100 flex items-center justify-center mr-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-green-600">
+            <path d="M8 12.5L10.5 15L16 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2"/>
+          </svg>
+        </div>
+      );
       break;
     case 'medium':
-      colorClasses = "bg-yellow-100 text-yellow-800 border-yellow-200";
-      bgGradient = "from-yellow-50 to-yellow-100";
-      IconComponent = AlertTriangle;
+      badgeVariant = "secondary";
+      iconVariant = (
+        <div className="h-6 w-6 rounded-full bg-amber-100 flex items-center justify-center mr-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-amber-600">
+            <path d="M12 9V13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            <path d="M12 17.01L12.01 16.999" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2"/>
+          </svg>
+        </div>
+      );
       break;
     case 'high':
-      colorClasses = "bg-orange-100 text-orange-800 border-orange-200";
-      bgGradient = "from-orange-50 to-orange-100";
-      IconComponent = AlertTriangle;
+      badgeVariant = "default";
+      iconVariant = (
+        <div className="h-6 w-6 rounded-full bg-orange-100 flex items-center justify-center mr-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-orange-600">
+            <path d="M12 9V13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            <path d="M12 17.01L12.01 16.999" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            <path d="M10.7676 3.05071L2.45825 17.2507C1.73807 18.5393 2.67174 20.1 4.19063 20.1H19.8094C21.3283 20.1 22.2619 18.5393 21.5418 17.2507L13.2324 3.05071C12.5224 1.78424 11.4776 1.78424 10.7676 3.05071Z" stroke="currentColor" strokeWidth="2"/>
+          </svg>
+        </div>
+      );
       break;
     case 'urgent':
-      colorClasses = "bg-red-100 text-red-800 border-red-200";
-      bgGradient = "from-red-50 to-red-100";
-      IconComponent = AlertTriangle;
+      badgeVariant = "destructive";
+      iconVariant = (
+        <div className="h-6 w-6 rounded-full bg-red-100 flex items-center justify-center mr-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-red-600">
+            <path d="M12 9V13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            <path d="M12 17.01L12.01 16.999" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            <path d="M10.7676 3.05071L2.45825 17.2507C1.73807 18.5393 2.67174 20.1 4.19063 20.1H19.8094C21.3283 20.1 22.2619 18.5393 21.5418 17.2507L13.2324 3.05071C12.5224 1.78424 11.4776 1.78424 10.7676 3.05071Z" stroke="currentColor" strokeWidth="2" fill="currentColor" fillOpacity="0.2"/>
+          </svg>
+        </div>
+      );
       break;
+    default:
+      badgeVariant = "outline";
+      iconVariant = (
+        <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center mr-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-600">
+            <path d="M12 9V13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            <path d="M12 17.01L12.01 16.999" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2"/>
+          </svg>
+        </div>
+      );
   }
 
   return (
-    <div className="group relative">
-      <div className={`w-full rounded-md shadow-sm border ${colorClasses} px-3 py-2 flex items-center gap-2 cursor-help`}>
-        <IconComponent className="h-5 w-5" />
-        <div className="flex items-center gap-1.5">
-          <span className="font-medium">Severity:</span>
-          <span className="font-bold">{level}</span>
+    <div className="w-full">
+      <div className={`rounded-lg p-3 flex items-center ${
+        severityLower === 'urgent' ? 'bg-red-50 border border-red-200' : 
+        severityLower === 'high' ? 'bg-orange-50 border border-orange-200' :
+        severityLower === 'medium' ? 'bg-amber-50 border border-amber-200' :
+        'bg-green-50 border border-green-200'
+      }`}>
+        {iconVariant}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1">
+          <div className="flex items-center gap-1.5">
+            <span className="font-medium">{level} Severity</span>
+          </div>
           {rationale && (
-            <span className="ml-2 text-xs opacity-70 hidden sm:inline-block">({rationale})</span>
+            <span className="text-sm opacity-90 sm:ml-2 text-muted-foreground">{rationale}</span>
           )}
         </div>
       </div>
     </div>
+  );
+};
+
+// Report Section Card Component
+interface ReportSectionCardProps {
+  section: ReportSection;
+  sectionKey: keyof Report['sections'];
+  toggleApproval: (sectionKey: keyof Report['sections'], itemId: string) => void;
+  updateItem: (sectionKey: keyof Report['sections'], itemId: string, newContent: string) => void;
+  toggleEditing: (sectionKey: keyof Report['sections'], itemId: string) => void;
+}
+
+const ReportSectionCard: React.FC<ReportSectionCardProps> = ({ 
+  section, 
+  sectionKey, 
+  toggleApproval, 
+  updateItem,
+  toggleEditing
+}) => {
+  return (
+    <Card>
+      <CardHeader className="py-3">
+        <CardTitle className="text-base">{section.title}</CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">
+        {section.items.length > 0 ? (
+          <div className="space-y-3">
+            {section.items.map((item) => (
+              <div key={item.id} className="group">
+                <div className="flex items-start gap-2 p-2 rounded-md border bg-card hover:bg-accent/5">
+                  <div className="flex-shrink-0 pt-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-5 w-5 rounded-full ${
+                        item.approved ? 'bg-green-100 text-green-700 hover:bg-green-200 hover:text-green-800' : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      }`}
+                      onClick={() => toggleApproval(sectionKey, item.id)}
+                    >
+                      {item.approved ? (
+                        <CheckCircle className="h-3 w-3" />
+                      ) : (
+                        <span className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </div>
+                  <div className="flex-1">
+                    {item.isEditing ? (
+                      <div className="space-y-2">
+                        <Input
+                          defaultValue={item.content}
+                          className="h-auto text-sm py-2"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              updateItem(sectionKey, item.id, e.currentTarget.value);
+                            }
+                          }}
+                        />
+                        <div className="flex gap-2">
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            className="h-7 text-xs"
+                            onClick={() => toggleEditing(sectionKey, item.id)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            className="h-7 text-xs"
+                            onClick={(e) => {
+                              const input = e.currentTarget.parentElement?.previousElementSibling as HTMLInputElement;
+                              if (input) {
+                                updateItem(sectionKey, item.id, input.value);
+                              }
+                            }}
+                          >
+                            Save
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <p className="text-sm">{item.content}</p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 ml-auto sm:ml-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => toggleEditing(sectionKey, item.id)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                          <span className="sr-only">Edit</span>
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground py-2">No items in this section.</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }; 
